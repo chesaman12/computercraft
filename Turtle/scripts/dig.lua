@@ -1,4 +1,4 @@
-local MIN_FUEL_LEVEL = 1650;
+local MIN_FUEL_LEVEL = 100;
 
 write("Dig up or down (u, d): ")
 local direction = read():lower()
