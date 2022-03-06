@@ -1,0 +1,2 @@
+turtle.turnRight()
+turtle.turnRight()
