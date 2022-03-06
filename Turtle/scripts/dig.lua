@@ -1,13 +1,25 @@
-write("dig up or down? (R to L) u,d: ")
-direction = read()
-write("length: ")
-length = tonumber(read())
-write("width: ")
-width = tonumber(read())
-write("depth/height: ")
-depth = tonumber(read())
+write("Dig up or down : u, d")
+local direction = read():lower()
+write("Dig to the left or right : l, r")
+local turn = read():lower()
+write("length : number ")
+local length = tonumber(read())
+write("width : number ")
+local width = tonumber(read())
+write("depth/height : number ")
+local depth = tonumber(read())
 
-turn = "left"
+if turn == "l" or turn == "left" then
+	turn = "left"
+elseif turn == "r" or turn == "right" then
+	turn = "right"
+end
+
+if direction == "u" or direction == "up" then
+	direction = "up"
+elseif direction == "d" or direction == "down" then
+	direction = "down"
+end
 
 function forwardAndDig()
 	--Digs until the turtle can move forward, to deal with gravel and sand.
@@ -17,7 +29,7 @@ function forwardAndDig()
 end
 
 function digUpOrDown()
-	if direction == "u" then
+	if direction == "up" then
 		turtle.digUp()
 	else
 		turtle.digDown()
@@ -54,7 +66,7 @@ for i=1,depth do
 		
 	end
 	
-	if direction == "u" then
+	if direction == "up" then
 		turtle.up()
 	else
 		turtle.down()
