@@ -1,20 +1,21 @@
-write("Dig up or down : u, d")
-local direction = read():lower()
-write("Dig to the left or right : l, r")
-local turn = read():lower()
-write("length : number")
-local length = tonumber(read())
-write("width : number")
-local width = tonumber(read())
-write("depth/height : number")
-local depth = tonumber(read())
+local MIN_FUEL_LEVEL = 1650;
 
-main()
+write("Dig up or down (u, d): ")
+local direction = read():lower()
+write("Dig to the left or right (l, r): ")
+local turn = read():lower()
+write("length: ")
+local length = tonumber(read())
+write("width: ")
+local width = tonumber(read())
+write("depth/height: ")
+local depth = tonumber(read())
 
 function main()
 	normalizeUserInput()
 	digLoop()
 	positionBackToStart()
+	os.reboot()
 end
 
 function normalizeUserInput()
@@ -46,6 +47,7 @@ function digLoop()
 			end
 			
 		end
+		verifyFuelLevel()
 		
 		if direction == "up" then
 			turtle.up()
@@ -83,6 +85,7 @@ function forwardAndDig()
 end
 
 function digUpOrDown()
+	verifyFuelLevel()
 	if direction == "up" then
 		turtle.digUp()
 	else
@@ -91,6 +94,7 @@ function digUpOrDown()
 end
 
 function adjustOrientation()
+	verifyFuelLevel()
 	if turn == "left" then
 		turtle.turnLeft()
 		forwardAndDig()
@@ -105,4 +109,15 @@ function adjustOrientation()
 	end
 end
 
-os.reboot()
+function verifyFuelLevel()
+	local fuelLevel = turtle.getFuelLevel();
+
+	if fuelLevel <= MIN_FUEL_LEVEL then
+		write("Fuel level low. Insert fuel & press enter to continue.\n")
+		read()
+		shell.run("refuel", "all")
+		write("New fuel level: " .. turtle.getFuelLevel() .. "\n")
+	end
+end
+
+main()
