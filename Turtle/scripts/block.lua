@@ -4,9 +4,18 @@ write("width: ")
 width = tonumber(read())
 write("height: ")
 height = tonumber(read())
+write("direction (l, r): ")
+local turn = read():lower()
 
 slot = 1
-turn = "left"
+
+function normalizeUserInput()
+	if turn == "l" or turn == "left" then
+		turn = "left"
+	elseif turn == "r" or turn == "right" then
+		turn = "right"
+	end
+end
 
 -- make sure we have enough to place
 function checkAndFillSlot()
@@ -51,31 +60,37 @@ function digAndPlace()
 	turtle.placeDown()
 end
 
-for i=1,height do
-	for j=1,length do
-		for k=1,width-1 do
+function main()
+	normalizeUserInput()
+
+	for i=1,height do
+		for j=1,length do
+			for k=1,width-1 do
+				digAndPlace()
+				
+				forwardAndDig()
+			end
+			
 			digAndPlace()
 			
-			forwardAndDig()
+			if j ~= length then
+				adjustOrientation()			
+			end
+			
 		end
 		
-		digAndPlace()
+		turtle.up()
 		
-		if j ~= length then
-			adjustOrientation()			
+		if turn == "left" then
+			turtle.turnLeft()
+			turtle.turnLeft()
+		else
+			turtle.turnRight()
+			turtle.turnRight()		
 		end
-		
 	end
 	
-	turtle.up()
-	
-	if turn == "left" then
-		turtle.turnLeft()
-		turtle.turnLeft()
-	else
-		turtle.turnRight()
-		turtle.turnRight()		
-	end
+	os.reboot()
 end
 
-os.reboot()
+main()
