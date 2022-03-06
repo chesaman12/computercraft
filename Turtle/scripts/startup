@@ -5,10 +5,11 @@ print("1: make a block")
 print("2: make a wall (L to R)")
 print("3: dig")
 print("4: move")
-print("5: ender mine")
-print("6: smart mine")
-print("7: House builder API")
-print("8: reboot")
+print("5: ender chest miner")
+print("6: no-chest miner")
+print("7: stair miner")
+print("8: House builder API")
+print("9: reboot")
 print("any key for none")
 write("--> ")
 choice = read()
@@ -25,8 +26,10 @@ elseif choice == "5" then
 elseif choice == "6" then
 	os.loadAPI("digsimple.lua")
 elseif choice == "7" then
-	os.loadAPI("housebuilder.lua")
+	os.loadAPI("stairminer.lua")
 elseif choice == "8" then
+	os.loadAPI("housebuilder.lua")
+elseif choice == "9" then
 	os.reboot()
 else
 	--print("that wasn't a valid command")
