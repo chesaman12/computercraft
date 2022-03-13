@@ -1,20 +1,3 @@
-while true do
-    -- if redstone from top
-    -- out left
-    if redstone.getInput('top') then
-        redstone.setOutput('left', true);
-    end
-
-    -- if redstone from the right
-    -- stop out left
-    if redstone.getInput('right') then
-        redstone.setOutput('left', false);
-    end
-
-    os.sleep(1)
-end
-
-
 -- create a gps system using the following:
 -- http://www.computercraft.info/forums2/index.php?/topic/3088-how-to-guide-gps-global-position-system/
 
@@ -58,3 +41,20 @@ end
     -- the computer above the clutch will be sending pause/resume
     -- so we can display something to indicate this with possible logging
     -- of events as they happen
+
+
+while true do
+    -- if redstone from top
+    -- out left
+    if redstone.getInput('top') then
+        redstone.setOutput('left', true);
+    end
+
+    -- if redstone from the right
+    -- stop out left
+    if redstone.getInput('right') then
+        redstone.setOutput('left', false);
+    end
+
+    os.sleep(1)
+end
