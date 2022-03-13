@@ -3,13 +3,19 @@ function main()
     transmittionLoop()
 end
 
+function getCords()
+    while true do
+        local x,y,z = gps.locate()
+        if x ~= nil and y ~= nil and z ~= nil then
+            return x,y,z
+        end
+    end
+end
+
 function transmittionLoop()
     print('monitoring gps cords..')
     while true do
-        local x,y,z = gps.locate()
-        if x == nil or y == nil or z == nil then
-            return;
-        end
+        local x,y,z = getCords()
 
         if z >= 1513 then
             print('OUT_OF_CONVEYOR')
