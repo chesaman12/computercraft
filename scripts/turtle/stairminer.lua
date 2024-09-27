@@ -1,3 +1,10 @@
+-- deals with falling sand/gravel
+function digUntilEmpty()
+    while turtle.detect() do 
+      turtle.dig() 
+    end
+end
+
 -- dig forward
 -- move forward
 -- dig down
@@ -6,7 +13,7 @@
 -- dig up
 
 function beginUp()
-    turtle.dig()
+    digUntilEmpty()
     turtle.forward()
     turtle.digDown()
     turtle.digUp()
@@ -24,7 +31,7 @@ end
 -- move dowm
 
 function beginDown()
-    turtle.dig()
+    digUntilEmpty()
     turtle.forward()
     turtle.digDown()
     turtle.down()
