@@ -1,4 +1,4 @@
--- Quarry Turtle Script with position tracking, precise resumption, and turtle naming
+-- Quarry Turtle Script with position tracking, precise resumption, turtle naming, Y-level prompt, and refueling
 
 local pos = {x = 0, y = 0, z = 0}
 local facing = "South" -- Possible values: "South", "West", "North", "East"
@@ -9,11 +9,42 @@ local turtleName = ""
 -- Initialize rednet
 peripheral.find("modem", rednet.open)
 
--- Function to get turtle name
-local function getTurtleName()
+-- Function to refuel the turtle
+local function refuel()
+    local fuelLevel = turtle.getFuelLevel()
+    if fuelLevel < 300 then  -- Only refuel if below 300
+        for i = 1, 16 do
+            turtle.select(i)
+            if turtle.refuel(0) then
+                local refuelAmount = math.min(64, math.ceil((300 - fuelLevel) / 80))
+                turtle.refuel(refuelAmount)
+                print("Refueled. New fuel level: " .. turtle.getFuelLevel())
+                return true
+            end
+        end
+        print("Fuel level low (" .. fuelLevel .. "). No fuel found in inventory!")
+        return fuelLevel > 0  -- Return true if there's still some fuel left
+    end
+    return true
+end
+
+-- Function to get turtle name and starting Y level
+local function getInitialInfo()
     print("Please enter a name for this turtle:")
     turtleName = read()
     print("Turtle name set to: " .. turtleName)
+
+    -- Prompt for starting Y level
+    print("At what Y level do you want to start quarrying?")
+    print("(Current position is 0, negative values go down)")
+    local startY = tonumber(read())
+
+    while startY == nil do
+        print("Invalid input. Please enter a number.")
+        startY = tonumber(read())
+    end
+
+    return startY
 end
 
 -- Function to update position based on movement
@@ -51,6 +82,10 @@ end
 
 -- Function to move with position tracking
 local function move(direction)
+    if not refuel() then
+        print("Out of fuel. Cannot move.")
+        return false
+    end
     local success
     if direction == "forward" then
         success = turtle.forward()
@@ -163,18 +198,54 @@ local function returnAndUnload()
     print(string.format("Resumed at position: x=%d, y=%d, z=%d, Facing: %s", pos.x, pos.y, pos.z, facing))
 end
 
--- Function to dig forward
+-- Function to dig forward, handling falling blocks like gravel
 local function digForward()
-    local success, data = turtle.inspect()
-    if success then
-        countBlock(data.name)
+    local maxAttempts = 10
+    for attempt = 1, maxAttempts do
+        local success, data = turtle.inspect()
+        if success then
+            countBlock(data.name)
+            turtle.dig()
+        end
+        
+        if turtle.forward() then
+            updatePosition("forward")
+            return true
+        end
+        
+        if attempt == maxAttempts then
+            print("Cannot move forward after " .. maxAttempts .. " attempts. Aborting.")
+            return false
+        end
+        
+        -- Wait a short time for gravel to fall
+        os.sleep(0.5)
     end
-    turtle.dig()
-    if move("forward") then
-        return true
+end
+
+-- Function to dig down, handling falling blocks like gravel
+local function digDown()
+    local maxAttempts = 10
+    for attempt = 1, maxAttempts do
+        local success, data = turtle.inspectDown()
+        if success then
+            countBlock(data.name)
+            turtle.digDown()
+        end
+        
+        if turtle.down() then
+            updatePosition("down")
+            return true
+        end
+        
+        if attempt == maxAttempts then
+            print("Cannot move down after " .. maxAttempts .. " attempts. Aborting.")
+            return false
+        end
+        
+        -- Wait a short time for gravel to fall
+        os.sleep(0.5)
     end
-    print("Cannot move forward. Aborting.")
-    return false
 end
 
 -- Function to dig a 16x16 area
@@ -208,10 +279,16 @@ end
 
 -- Function to dig one layer
 local function digLayer()
+    if not refuel() then
+        print("Out of fuel. Cannot dig layer.")
+        return false
+    end
     if not digArea() then
         print("Failed to complete the 16x16 area.")
+        return false
     else
         print("Successfully completed the 16x16 area")
+        return true
     end
 end
 
@@ -248,9 +325,67 @@ local function returnToLayerStart()
                         turtleName, pos.x, pos.y, pos.z, facing))
 end
 
+-- Function to move to x=0, z=0
+local function moveToOrigin()
+    print(string.format("%s moving to origin (x=0, z=0)", turtleName))
+    
+    -- First, move to x = 0
+    while pos.x ~= 0 do
+        if pos.x > 0 then
+            while facing ~= "West" do turn("right") end
+        else
+            while facing ~= "East" do turn("right") end
+        end
+        turtle.dig()
+        move("forward")
+    end
+    
+    -- Then, move to z = 0
+    while pos.z ~= 0 do
+        if pos.z > 0 then
+            while facing ~= "North" do turn("right") end
+        else
+            while facing ~= "South" do turn("right") end
+        end
+        turtle.dig()
+        move("forward")
+    end
+    
+    print(string.format("%s reached origin. Position: x=%d, y=%d, z=%d", 
+                        turtleName, pos.x, pos.y, pos.z))
+end
+
+-- Function to move to starting Y level
+local function moveToStartY(startY)
+    moveToOrigin()  -- First, move to x=0, z=0
+    print(string.format("%s moving to starting Y level: %d", turtleName, startY))
+    while pos.y > startY do
+        if not digDown() then
+            print("Cannot move down. There might be an obstacle.")
+            return false
+        end
+    end
+    while pos.y < startY do
+        turtle.digUp()  -- Dig above before moving up
+        if turtle.up() then
+            updatePosition("up")
+        else
+            print("Cannot move up. There might be an obstacle.")
+            return false
+        end
+    end
+    print(string.format("%s reached starting Y level: %d", turtleName, pos.y))
+    return true
+end
+
 -- Main digging function
 local function digQuarry()
     while true do
+        if not refuel() then
+            print("Out of fuel. Aborting quarry operation.")
+            return
+        end
+        
         local success, data = turtle.inspectDown()
         if success then
             countBlock(data.name)
@@ -267,7 +402,10 @@ local function digQuarry()
         if canMove then
             returnToLayerStart()
             print(string.format("%s starting to dig layer at y=%d", turtleName, pos.y))
-            digLayer()
+            if not digLayer() then
+                print("Failed to dig layer. Aborting quarry operation.")
+                break
+            end
         else
             print(string.format("%s encountered obstacle at y=%d, attempting to continue", turtleName, pos.y))
         end
@@ -279,7 +417,17 @@ local function digQuarry()
 end
 
 -- Main program
-getTurtleName()
+local startY = getInitialInfo()
 print("Starting quarry operation for " .. turtleName)
-digQuarry()
+
+if not refuel() then
+    print("No fuel available. Aborting quarry operation.")
+else
+    if not moveToStartY(startY) then
+        print("Failed to reach starting Y level. Aborting quarry operation.")
+    else
+        digQuarry()
+    end
+end
+
 print("Quarry operation complete for " .. turtleName)
