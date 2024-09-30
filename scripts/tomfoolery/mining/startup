@@ -1,0 +1,15 @@
+turtle.refuel()
+print(turtle.getFuelLevel())
+print("what would you like to do sir?")
+print("1: mine a tunnel")
+print("9: reboot")
+print("any key for none")
+write("--> ")
+choice = read()
+if choice == "1" then
+	os.loadAPI("miningTunnel.lua")
+elseif choice == "9" then
+	os.reboot()
+else
+	print("that wasn't a valid command")
+end
