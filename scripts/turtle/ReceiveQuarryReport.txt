@@ -1,0 +1,9 @@
+rednet.open("back")  -- or whichever side your modem is on
+
+while true do
+    local sender, message = rednet.receive()
+    if message:match("Quarry Update:") then
+        print(message)
+        print("--------------------")
+    end
+end

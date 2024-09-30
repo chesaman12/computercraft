@@ -1,0 +1,285 @@
+-- Quarry Turtle Script with position tracking, precise resumption, and turtle naming
+
+local pos = {x = 0, y = 0, z = 0}
+local facing = "South" -- Possible values: "South", "West", "North", "East"
+local blockCounts = {}
+local pausedAt = nil
+local turtleName = ""
+
+-- Initialize rednet
+peripheral.find("modem", rednet.open)
+
+-- Function to get turtle name
+local function getTurtleName()
+    print("Please enter a name for this turtle:")
+    turtleName = read()
+    print("Turtle name set to: " .. turtleName)
+end
+
+-- Function to update position based on movement
+local function updatePosition(direction)
+    if direction == "forward" then
+        if facing == "South" then pos.z = pos.z + 1
+        elseif facing == "West" then pos.x = pos.x - 1
+        elseif facing == "North" then pos.z = pos.z - 1
+        else pos.x = pos.x + 1 end
+    elseif direction == "up" then
+        pos.y = pos.y + 1
+    elseif direction == "down" then
+        pos.y = pos.y - 1
+    end
+end
+
+-- Function to turn and update facing
+local function turn(direction)
+    local directions = {"South", "West", "North", "East"}
+    local currentIndex
+    for i, dir in ipairs(directions) do
+        if dir == facing then
+            currentIndex = i
+            break
+        end
+    end
+    if direction == "right" then
+        facing = directions[(currentIndex - 2) % 4 + 1]
+        turtle.turnRight()
+    else
+        facing = directions[currentIndex % 4 + 1]
+        turtle.turnLeft()
+    end
+end
+
+-- Function to move with position tracking
+local function move(direction)
+    local success
+    if direction == "forward" then
+        success = turtle.forward()
+    elseif direction == "up" then
+        success = turtle.up()
+    elseif direction == "down" then
+        success = turtle.down()
+    end
+    if success then
+        updatePosition(direction)
+        return true
+    end
+    return false
+end
+
+-- Function to add a block to the count
+local function countBlock(blockName)
+    blockCounts[blockName] = (blockCounts[blockName] or 0) + 1
+end
+
+-- Function to broadcast block counts, position, and facing direction
+local function broadcastUpdate()
+    local message = string.format("Quarry Update from %s:\nPosition: x=%d, y=%d, z=%d\nFacing: %s\n", 
+                                  turtleName, pos.x, pos.y, pos.z, facing)
+    for block, count in pairs(blockCounts) do
+        message = message .. string.format("%s: %d\n", block, count)
+    end
+    rednet.broadcast(message)
+    print("Broadcasted update")
+end
+
+-- Function to check if inventory is full
+local function isInventoryFull()
+    for i = 1, 16 do
+        if turtle.getItemCount(i) == 0 then
+            return false
+        end
+    end
+    return true
+end
+
+-- Function to return to surface and unload
+local function returnAndUnload()
+    print("Inventory full. Returning to surface to unload.")
+    
+    -- Record current position and orientation
+    pausedAt = {x = pos.x, y = pos.y, z = pos.z, facing = facing}
+    
+    -- Return to surface
+    while pos.y < 0 do
+        turtle.digUp()
+        move("up")
+    end
+    
+    -- Return to x = 0, z = 0
+    while pos.x ~= 0 or pos.z ~= 0 do
+        if pos.x > 0 then
+            while facing ~= "West" do turn("right") end
+            turtle.dig()
+            move("forward")
+        elseif pos.x < 0 then
+            while facing ~= "East" do turn("right") end
+            turtle.dig()
+            move("forward")
+        elseif pos.z > 0 then
+            while facing ~= "North" do turn("right") end
+            turtle.dig()
+            move("forward")
+        elseif pos.z < 0 then
+            while facing ~= "South" do turn("right") end
+            turtle.dig()
+            move("forward")
+        end
+    end
+    
+    -- Broadcast update
+    broadcastUpdate()
+    
+    -- Turn to face the chest and unload
+    while facing ~= "North" do turn("right") end
+    for i = 1, 16 do
+        turtle.select(i)
+        turtle.drop()
+    end
+    
+    -- Return to paused position
+    print("Returning to paused position")
+    while pos.y > pausedAt.y do
+        move("down")
+    end
+    while pos.x ~= pausedAt.x or pos.z ~= pausedAt.z do
+        if pos.x < pausedAt.x then
+            while facing ~= "East" do turn("right") end
+        elseif pos.x > pausedAt.x then
+            while facing ~= "West" do turn("right") end
+        elseif pos.z < pausedAt.z then
+            while facing ~= "South" do turn("right") end
+        elseif pos.z > pausedAt.z then
+            while facing ~= "North" do turn("right") end
+        end
+        turtle.dig()
+        move("forward")
+    end
+    
+    -- Restore original facing direction
+    while facing ~= pausedAt.facing do
+        turn("right")
+    end
+    
+    print(string.format("Resumed at position: x=%d, y=%d, z=%d, Facing: %s", pos.x, pos.y, pos.z, facing))
+end
+
+-- Function to dig forward
+local function digForward()
+    local success, data = turtle.inspect()
+    if success then
+        countBlock(data.name)
+    end
+    turtle.dig()
+    if move("forward") then
+        return true
+    end
+    print("Cannot move forward. Aborting.")
+    return false
+end
+
+-- Function to dig a 16x16 area
+local function digArea()
+    for x = 1, 16 do
+        for z = 1, 16 do
+            local success, data = turtle.inspectDown()
+            if success then
+                countBlock(data.name)
+            end
+            turtle.digDown()
+            if isInventoryFull() then
+                returnAndUnload()
+            end
+            if z < 16 and not digForward() then return false end
+        end
+        if x < 16 then
+            if x % 2 == 1 then
+                turn("right")
+                if not digForward() then return false end
+                turn("right")
+            else
+                turn("left")
+                if not digForward() then return false end
+                turn("left")
+            end
+        end
+    end
+    return true
+end
+
+-- Function to dig one layer
+local function digLayer()
+    if not digArea() then
+        print("Failed to complete the 16x16 area.")
+    else
+        print("Successfully completed the 16x16 area")
+    end
+end
+
+-- Function to return to start position of the layer
+local function returnToLayerStart()
+    print(string.format("%s returning to layer start (x=0, z=0)", turtleName))
+    
+    -- First, return to x = 0
+    while pos.x ~= 0 do
+        if pos.x > 0 then
+            while facing ~= "West" do turn("right") end
+        else
+            while facing ~= "East" do turn("right") end
+        end
+        turtle.dig()
+        move("forward")
+    end
+    
+    -- Then, return to z = 0
+    while pos.z ~= 0 do
+        if pos.z > 0 then
+            while facing ~= "North" do turn("right") end
+        else
+            while facing ~= "South" do turn("right") end
+        end
+        turtle.dig()
+        move("forward")
+    end
+    
+    -- Finally, face South
+    while facing ~= "South" do turn("right") end
+    
+    print(string.format("%s at layer start. Position: x=%d, y=%d, z=%d, Facing: %s", 
+                        turtleName, pos.x, pos.y, pos.z, facing))
+end
+
+-- Main digging function
+local function digQuarry()
+    while true do
+        local success, data = turtle.inspectDown()
+        if success then
+            countBlock(data.name)
+        end
+        
+        local canDig = turtle.digDown()
+        local canMove = move("down")
+        
+        if not canDig and not canMove then
+            print("Cannot dig down or move down further. Quarry complete.")
+            break
+        end
+        
+        if canMove then
+            returnToLayerStart()
+            print(string.format("%s starting to dig layer at y=%d", turtleName, pos.y))
+            digLayer()
+        else
+            print(string.format("%s encountered obstacle at y=%d, attempting to continue", turtleName, pos.y))
+        end
+    end
+    
+    print(string.format("Quarry complete for %s. Final position: x=%d, y=%d, z=%d, Facing: %s", 
+                        turtleName, pos.x, pos.y, pos.z, facing))
+    broadcastUpdate()
+end
+
+-- Main program
+getTurtleName()
+print("Starting quarry operation for " .. turtleName)
+digQuarry()
+print("Quarry operation complete for " .. turtleName)
