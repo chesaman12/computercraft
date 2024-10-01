@@ -1,0 +1,276 @@
+-- MOVEMENT FUNCTIONS ----------------------------------------------------------------
+
+-- Function to move up once, ensuring there is no block above
+-- returns true if the turtle successfully moved up
+--         false if the turtle couldn't move up
+-- throws an error if the block above cannot be dug
+function digAndMoveUp()
+    -- Check if there's a block above and dig it out if necessary
+    if turtle.detectUp() then
+        if not turtle.digUp() then
+            error("Failed to dig block above. It might be unbreakable.")
+        end
+    end
+    
+    -- Attempt to move up
+    if not turtle.up() then
+        return false
+    end
+    
+    return true
+end
+
+-- Function to turn the turtle to the left
+-- returns true if the turtle successfully turned left
+function turnLeft()
+    return turtle.turnLeft()
+end
+
+-- Function to turn the turtle to the right
+-- returns true if the turtle successfully turned right
+function turnRight()
+    return turtle.turnRight()
+end
+
+-- Function to dig in front of the turtle and then move forward
+-- returns true if the turtle successfully moved forward
+--         false if the turtle couldn't move forward
+-- throws an error if the block cannot be dug
+function digAndMoveForward()
+    -- Dig the block in front if there is one
+    if turtle.detect() then
+        if not turtle.dig() then
+            error("Failed to dig block in front. It might be unbreakable.")
+        end
+    end
+    
+    -- Attempt to move forward
+    if not turtle.forward() then
+        return false
+    end
+    
+    return true
+end
+
+-- Function to place a block below the turtle from the selected slot
+-- returns true if the block was successfully placed
+--         false if no blocks are in the selected slot
+-- throws an error if the block cannot be placed
+function digAndPlaceItemDown()
+    -- Check if there are any blocks in the selected slot
+    if turtle.getItemCount() <= 0 then
+        return false
+    end
+    
+    -- Check if there's a block below and dig it out if necessary
+    if turtle.detectDown() then
+        if not turtle.digDown() then
+            error("Failed to dig block below. It might be unbreakable.")
+        end
+    end
+    
+    -- Attempt to place the block
+    if not turtle.placeDown() then
+        error("Failed to place block. There might still be an obstacle below.")
+    end
+    
+    return true
+end
+
+-- SLOT FUNCTIONS ----------------------------------------------------------------
+
+-- Function to detect the item in a specific slot
+-- returns the item name or nil if the slot is empty
+function getNameOfItemInSlot(slotItemNumber)
+    turtle.select(slotItemNumber)
+    local itemDetail = turtle.getItemDetail()
+    
+    if itemDetail then
+        return itemDetail.name
+    else
+        return nil
+    end
+end
+
+-- Function to select a specific slot
+-- Returns true if the slot was successfully selected, false otherwise
+function selectSlot(slotNumber)
+    if slotNumber < 1 or slotNumber > 16 then
+        print("Invalid slot number. Please choose a number between 1 and 16.")
+        return false
+    end
+    
+    return turtle.select(slotNumber)
+end
+
+-- USER INPUT FUNCTIONS ----------------------------------------------------------------
+
+-- Function to get user input for a specific axis dimension
+function getAxisInput(axisName)
+    while true do
+        print("Enter the " .. axisName .. " dimension (positive number):")
+        local input = read()
+        local number = tonumber(input)
+        
+        if number and number > 0 then
+            return number
+        else
+            print("Invalid input. Please enter a positive number.")
+        end
+    end
+end
+
+-- Function to get dimensions for all axes
+-- returns a table with the following keys:
+-- - x: the depth (x-axis)
+-- - y: the width (y-axis)
+-- - z: the height (z-axis)
+function getDimensionsInput()
+    local dimensions = {}
+    dimensions.x = getAxisInput("depth (x-axis)")
+    dimensions.y = getAxisInput("width (y-axis)")
+    dimensions.z = getAxisInput("height (z-axis)")
+    return dimensions
+end
+
+-- Function to get user input for direction (left or right)
+-- returns "left" or "right"
+function getLeftOrRightInput()
+    while true do
+        print("Enter the direction (left/l or right/r):")
+        local input = string.lower(read())
+        
+        if input == "left" or input == "l" then
+            return "left"
+        elseif input == "right" or input == "r" then
+            return "right"
+        else
+            print("Invalid input. Please enter 'left', 'l', 'right', or 'r'.")
+        end
+    end
+end
+
+-- Function to get user input for floor/ceiling options
+-- returns "n", "f", "c", or "fc"
+function getFloorCeilingInput()
+    while true do
+        print("Enter the floor/ceiling option:")
+        print("n or [empty] - None")
+        print("f - Floor only")
+        print("c - Ceiling only")
+        print("fc or cf - Both floor and ceiling")
+        local input = string.lower(read())
+        
+        if input == "n" or input == "" then
+            return "n"
+        elseif input == "f" or input == "c" then
+            return input
+        elseif input == "fc" or input == "cf" then
+            return "fc"
+        else
+            print("Invalid input. Please enter 'n', 'f', 'c', 'fc', 'cf', or leave empty for none.")
+        end
+    end
+end
+
+-- MAIN BUILDING FUNCTIONS ----------------------------------------------------------------
+
+-- Function to place a floor or ceiling
+function placeLayer(dimensions, direction)
+    print("Placing layer...")
+    local startSlot = turtle.getSelectedSlot()
+    local currentSlot = startSlot
+
+    for x = 1, dimensions.x do
+        if not placeRow(dimensions.y, currentSlot, startSlot) then
+            return false
+        end
+        
+        if x < dimensions.x then
+            if not moveToNextRow(x, direction) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function placeRow(length, currentSlot, startSlot)
+    for y = 1, length do
+        if not placeBlockBelow() then
+            print("Failed to place block. Checking inventory...")
+            if not checkInventoryAndPlace(currentSlot, startSlot) then
+                return false
+            end
+        end
+        
+        if y < length then
+            if not moveForward() then
+                print("Unable to move forward. Aborting.")
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function checkInventoryAndPlace(currentSlot, startSlot)
+    repeat
+        currentSlot = (currentSlot % 16) + 1
+        selectSlot(currentSlot)
+        if placeBlockBelow() then
+            return true
+        end
+    until currentSlot == startSlot
+
+    if currentSlot == startSlot then
+        print("Out of blocks. Please refill and press Enter to continue.")
+        read()
+        if not placeBlockBelow() then
+            print("Still unable to place block. Aborting.")
+            return false
+        end
+    end
+    return true
+end
+
+function moveToNextRow(row, direction)
+    if direction == "left" then
+        if row % 2 == 1 then
+            turnLeft()
+            if not moveForward() then
+                print("Unable to move to next row. Aborting.")
+                return false
+            end
+            turnLeft()
+        else
+            turnRight()
+        end
+    else -- direction == "right"
+        if row % 2 == 1 then
+            turnRight()
+            if not moveForward() then
+                print("Unable to move to next row. Aborting.")
+                return false
+            end
+            turnRight()
+        else
+            turnLeft()
+        end
+    end
+    return true
+end
+
+-- MAIN FUNCTIONS ----------------------------------------------------------------
+
+-- Main function to run the shell builder
+function main()
+    local direction = getLeftOrRightInput()
+    local dimensions = getDimensionsInput()
+    local floorCeiling = getFloorCeilingInput()
+    placeLayer(dimensions, direction)
+end
+
+-- Call the main function to start the program
+main()
+
