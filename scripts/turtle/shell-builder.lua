@@ -32,6 +32,15 @@ function turnRight()
     return turtle.turnRight()
 end
 
+-- Function to turn the turtle around (180 degrees)
+-- returns true if the turtle successfully turned around
+function turnAround()
+    turnLeft()
+    turnLeft()
+    return true
+end
+
+
 -- Function to dig in front of the turtle and then move forward
 -- returns true if the turtle successfully moved forward
 --         false if the turtle couldn't move forward
@@ -52,11 +61,11 @@ function digAndMoveForward()
     return true
 end
 
--- Function to place a block below the turtle from the selected slot
+-- Function to place a block below the turtle
 -- returns true if the block was successfully placed
 --         false if no blocks are in the selected slot
 -- throws an error if the block cannot be placed
-function digAndPlaceItemDown()
+function placeBlockBelow()
     -- Check if there are any blocks in the selected slot
     if turtle.getItemCount() <= 0 then
         return false
@@ -127,9 +136,9 @@ end
 -- - z: the height (z-axis)
 function getDimensionsInput()
     local dimensions = {}
-    dimensions.x = getAxisInput("depth (x-axis)")
-    dimensions.y = getAxisInput("width (y-axis)")
-    dimensions.z = getAxisInput("height (z-axis)")
+    dimensions.x = getAxisInput("height")
+    dimensions.y = getAxisInput("width")
+    dimensions.z = getAxisInput("length")
     return dimensions
 end
 
@@ -151,52 +160,113 @@ function getLeftOrRightInput()
 end
 
 -- Function to get user input for floor/ceiling options
--- returns "n", "f", "c", or "fc"
+-- returns "n", "f", "c", or "b"
 function getFloorCeilingInput()
     while true do
-        print("Enter the floor/ceiling option:")
-        print("n or [empty] - None")
+        print("Want a floor, ceiling, both, or none?")
+        print("b - Both floor and ceiling")
         print("f - Floor only")
         print("c - Ceiling only")
-        print("fc or cf - Both floor and ceiling")
+        print("n - None (or hit enter)")
         local input = string.lower(read())
         
         if input == "n" or input == "" then
             return "n"
-        elseif input == "f" or input == "c" then
+        elseif input == "f" or input == "c" or input == "b" then
             return input
-        elseif input == "fc" or input == "cf" then
-            return "fc"
         else
-            print("Invalid input. Please enter 'n', 'f', 'c', 'fc', 'cf', or leave empty for none.")
+            print("Invalid input. Please enter 'n', 'f', 'c', 'b', or leave empty for none.")
         end
     end
 end
 
+
+
+
 -- MAIN BUILDING FUNCTIONS ----------------------------------------------------------------
+function buildWalls(dimensions, direction)
+    local height = dimensions.x
+    for i = 1, height do
+        buildWall(dimensions, direction)
+    end
+end
+
+function buildWall(dimensions, direction)
+    digAndMoveUp()
+    placeRow(dimensions.z)
+
+    if direction == "left" then
+        turnLeft()
+        digAndMoveForward()
+    else
+        turnRight()
+        digAndMoveForward()
+    end
+
+    placeRow(dimensions.y - 1)
+    if direction == "left" then
+        turnLeft()
+        digAndMoveForward()
+    else
+        turnRight()
+        digAndMoveForward()
+    end
+
+    placeRow(dimensions.z - 1)
+    if direction == "left" then
+        turnLeft()
+        digAndMoveForward()
+    else
+        turnRight()
+        digAndMoveForward()
+    end
+
+    placeRow(dimensions.y - 1)
+    if direction == "left" then
+        turnLeft()
+    else
+        turnRight()
+    end
+end
 
 -- Function to place a floor or ceiling
 function placeLayer(dimensions, direction)
-    print("Placing layer...")
-    local startSlot = turtle.getSelectedSlot()
-    local currentSlot = startSlot
-
-    for x = 1, dimensions.x do
-        if not placeRow(dimensions.y, currentSlot, startSlot) then
+    for y = 1, dimensions.y do
+        if not placeRow(dimensions.z) then
             return false
         end
         
-        if x < dimensions.x then
-            if not moveToNextRow(x, direction) then
+        if y < dimensions.y then
+            if not moveToNextRow(y, direction) then
                 return false
             end
         end
     end
+
+    if direction == "left" then
+        turnLeft()
+    else
+        turnRight()
+    end
+
+    for y = 1, dimensions.y - 1 do
+        digAndMoveForward()
+    end
+
+    if direction == "left" then
+        turnLeft()
+    else
+        turnRight()
+    end
+
     return true
 end
 
-function placeRow(length, currentSlot, startSlot)
-    for y = 1, length do
+function placeRow(length)
+    local startSlot = turtle.getSelectedSlot()
+    local currentSlot = startSlot
+
+    for z = 1, length do
         if not placeBlockBelow() then
             print("Failed to place block. Checking inventory...")
             if not checkInventoryAndPlace(currentSlot, startSlot) then
@@ -204,8 +274,8 @@ function placeRow(length, currentSlot, startSlot)
             end
         end
         
-        if y < length then
-            if not moveForward() then
+        if z < length then
+            if not digAndMoveForward() then
                 print("Unable to move forward. Aborting.")
                 return false
             end
@@ -225,7 +295,7 @@ function checkInventoryAndPlace(currentSlot, startSlot)
 
     if currentSlot == startSlot then
         print("Out of blocks. Please refill and press Enter to continue.")
-        read()
+        turtle.read()
         if not placeBlockBelow() then
             print("Still unable to place block. Aborting.")
             return false
@@ -235,40 +305,73 @@ function checkInventoryAndPlace(currentSlot, startSlot)
 end
 
 function moveToNextRow(row, direction)
+    print("Moving to next row. Current row:", row, "Direction:", direction)
+    
     if direction == "left" then
         if row % 2 == 1 then
             turnLeft()
-            if not moveForward() then
+            if not digAndMoveForward() then
                 print("Unable to move to next row. Aborting.")
                 return false
             end
             turnLeft()
         else
+            turnRight()
+            if not digAndMoveForward() then
+                print("Unable to move to next row. Aborting.")
+                return false
+            end
             turnRight()
         end
     else -- direction == "right"
         if row % 2 == 1 then
             turnRight()
-            if not moveForward() then
+            if not digAndMoveForward() then
                 print("Unable to move to next row. Aborting.")
                 return false
             end
             turnRight()
         else
             turnLeft()
+            if not digAndMoveForward() then
+                print("Unable to move to next row. Aborting.")
+                return false
+            end
+            turnLeft()
         end
     end
+    
     return true
 end
 
 -- MAIN FUNCTIONS ----------------------------------------------------------------
+
+-- Function to handle the building process based on user input
+function handleBuildingProcess(direction, dimensions, floorCeiling)
+    if floorCeiling == "f" then 
+        placeLayer(dimensions, direction)
+        buildWalls(dimensions, direction)
+    elseif floorCeiling == "c" then
+        buildWalls(dimensions, direction)
+        placeLayer(dimensions, direction)
+    elseif floorCeiling == "b" then
+        placeLayer(dimensions, direction)
+        buildWalls(dimensions, direction)  
+        placeLayer(dimensions, direction)
+    else
+        buildWalls(dimensions, direction)
+    end
+end
+
 
 -- Main function to run the shell builder
 function main()
     local direction = getLeftOrRightInput()
     local dimensions = getDimensionsInput()
     local floorCeiling = getFloorCeilingInput()
-    placeLayer(dimensions, direction)
+
+    -- todo build walls doesn't work, need to replace buildWalls and buildWallSegment
+    handleBuildingProcess(direction, dimensions, floorCeiling)
 end
 
 -- Call the main function to start the program
