@@ -192,11 +192,43 @@ local function idleForResource(resource)
         if resource == "fuel" then
             -- Try to pick up fuel from chest
             if isChestInFront() then
-                for slot = 1, 15 do
-                    turtle.select(slot)
-                    turtle.suck(64)
+                -- Look for fuel items in chest
+                local attempts = 0
+                while fuel.getLevel() < CONFIG.minFuelToStart and attempts < 27 do
+                    attempts = attempts + 1
+                    
+                    -- Find empty slot
+                    local emptySlot = nil
+                    for slot = 1, 15 do
+                        if turtle.getItemCount(slot) == 0 then
+                            emptySlot = slot
+                            break
+                        end
+                    end
+                    
+                    if not emptySlot then break end
+                    
+                    turtle.select(emptySlot)
+                    if turtle.suck(64) then
+                        if turtle.refuel(0) then
+                            turtle.refuel()
+                        else
+                            turtle.drop()
+                        end
+                    else
+                        break
+                    end
                 end
-                fuel.autoRefuel(CONFIG.minFuelToStart)
+                
+                -- Drop any non-fuel items back
+                for slot = 1, 15 do
+                    if turtle.getItemCount(slot) > 0 then
+                        turtle.select(slot)
+                        if not turtle.refuel(0) then
+                            turtle.drop()
+                        end
+                    end
+                end
             end
             
             if fuel.getLevel() >= CONFIG.minFuelToStart then
@@ -284,28 +316,69 @@ local function depositAndRestock()
         end
     end
     
-    -- Try to pick up fuel from chest
+    -- Try to pick up fuel from chest if needed
     local needFuel = not fuel.isUnlimited() and fuel.getLevel() < CONFIG.minFuelToStart
     if needFuel then
-        -- Suck items to find fuel
-        for slot = 1, 15 do
-            turtle.select(slot)
-            if turtle.suck(64) then
-                -- Check if it's fuel
-                if not turtle.refuel(0) then
-                    -- Not fuel, put it back
-                    turtle.drop()
+        print("Looking for fuel in chest...")
+        
+        -- Try to suck fuel items into slot 1
+        turtle.select(1)
+        
+        -- Keep trying to get items until we have enough fuel or chest is empty
+        local attempts = 0
+        local maxAttempts = 27  -- Max chest slots
+        
+        while fuel.getLevel() < CONFIG.minFuelToStart and attempts < maxAttempts do
+            attempts = attempts + 1
+            
+            -- Find an empty slot to pull into
+            local emptySlot = nil
+            for slot = 1, 15 do
+                if turtle.getItemCount(slot) == 0 then
+                    emptySlot = slot
+                    break
                 end
             end
+            
+            if not emptySlot then
+                -- Inventory full, try to refuel from what we have
+                fuel.autoRefuel(CONFIG.minFuelToStart)
+                -- Drop non-fuel items back
+                for slot = 1, 15 do
+                    turtle.select(slot)
+                    if turtle.getItemCount(slot) > 0 and not turtle.refuel(0) then
+                        turtle.drop()
+                    end
+                end
+                break
+            end
+            
+            turtle.select(emptySlot)
+            if turtle.suck(64) then
+                -- Got an item, check if it's fuel
+                if turtle.refuel(0) then
+                    -- It's fuel! Consume it
+                    turtle.refuel()
+                    print(string.format("Refueled! Fuel: %d", fuel.getLevel()))
+                else
+                    -- Not fuel, put it back immediately
+                    turtle.drop()
+                end
+            else
+                -- Chest is empty or can't suck more
+                break
+            end
         end
-        fuel.autoRefuel(CONFIG.minFuelToStart)
         
-        -- Put unused items back
+        -- Drop any remaining non-fuel items back into chest
         for slot = 1, 15 do
             local detail = turtle.getItemDetail(slot)
             if detail then
                 turtle.select(slot)
-                turtle.drop()
+                -- Only drop if it's not fuel
+                if not turtle.refuel(0) then
+                    turtle.drop()
+                end
             end
         end
     end
