@@ -1,25 +1,32 @@
 --- Smart Mining Turtle Script
--- An optimized branch mining turtle using vertical snake pattern for maximum ore exposure
+-- An optimized branch mining turtle using wiki-recommended techniques for maximum efficiency
 --
 -- Features:
--- - Snake mining pattern: Moves in a vertical wave (floor->ceiling->floor) to expose
---   all 6 block faces at multiple heights, catching more ore veins
--- - Mines 1x3 tunnels (3 blocks high) with ore checks at floor and ceiling levels
+-- - Standard 1x2 tunnels (1 wide, 2 tall) as recommended by Minecraft Wiki
+-- - Pokehole mining: Every 4 blocks, digs 1-block holes left and right to expose more ore
+--   (This gives better blocks-revealed to blocks-mined ratio than wider tunnels)
+-- - Branch spacing of 6 blocks for maximum efficiency (or 3 for balance)
 -- - Checks all 6 directions for valuable ores and follows veins recursively
 -- - Tracks position and can return home safely
 -- - Manages inventory, discards junk, deposits valuables in chest
 -- - Auto-refuels from inventory and chest
 -- - Places torches at regular intervals
 --
--- Mining Pattern (side view):
---   At each forward step, turtle moves: floor -> middle -> ceiling -> middle -> floor
---   This creates a 1x3 tunnel and checks ores at floor level (checking down) and
---   ceiling level (checking up), plus horizontal checks at both heights
+-- Mining Pattern (top-down view):
+--   Main tunnel goes forward, branches go left/right
+--   With pokeholes enabled, each branch looks like:
+--     ═══╤═══╤═══╤═══  (main branch tunnel, 2 tall)
+--        │   │   │     (pokeholes every 4 blocks, 1 tall, expose extra ore faces)
+--
+-- Efficiency (from wiki MATLAB analysis):
+-- - Spacing 6: Maximum efficiency, ~1.7% of blocks are diamond
+-- - Spacing 3: Good balance of efficiency and thoroughness
+-- - Pokeholes: Reveal more blocks without mining full tunnels
 --
 -- Usage: smart_miner <length> [branches] [spacing]
 --   length:  How far each branch extends (default: 50)
 --   branches: Number of branches on each side (default: 5)
---   spacing: Blocks between branches (default: 3, optimal for ore exposure per wiki)
+--   spacing: Blocks between branches (default: 6 for max efficiency)
 --
 -- IMPORTANT: Run from the root installation directory (where common/ is):
 --   mining/smart_miner 50
@@ -72,19 +79,18 @@ local CONFIG = {
     -- Mining parameters
     branchLength = 50,      -- Length of each branch
     branchCount = 5,        -- Branches per side
-    branchSpacing = 3,      -- Blocks between branches (3 = optimal ore exposure)
-    tunnelHeight = 3,       -- Height of tunnel (3 blocks tall for snake mining)
+    branchSpacing = 6,      -- Blocks between branches (6 = maximum efficiency per wiki)
+                            -- Use 3 for balance of efficiency and thoroughness
+    tunnelHeight = 2,       -- Height of tunnel (standard 1x2 as per wiki)
     
-    -- Snake mining pattern settings
-    -- The turtle moves in a vertical snake pattern:
-    --   1. At floor: check below and sides
-    --   2. Move up, check ceiling and sides
-    --   3. Move forward
-    --   4. Check ceiling and sides
-    --   5. Move down, check floor and sides
-    --   6. Move forward, repeat
-    -- This exposes 4 block faces vertically and all 4 horizontal faces at 2 heights
-    useSnakeMining = true,  -- Use vertical snake pattern for maximum ore exposure
+    -- Pokehole mining settings (from wiki "Layout 6")
+    -- Every N blocks, dig 1-block holes to left and right to expose more ore
+    -- This gives better blocks-revealed to blocks-mined ratio
+    usePokeholes = true,    -- Enable pokehole mining for extra ore exposure
+    pokeholeInterval = 4,   -- Dig pokeholes every N blocks (wiki recommends 4)
+    
+    -- Legacy snake mining (NOT recommended by wiki - uses more fuel, less efficient)
+    useSnakeMining = false, -- Disabled - wiki recommends standard 1x2 tunnels
     
     -- Behavior settings
     placeFloors = false,    -- Place cobblestone floors over gaps
@@ -183,9 +189,7 @@ end
 local function fuelNeededToReturnHome()
     local pos = movement.getPosition()
     local distanceHome = math.abs(pos.x) + math.abs(pos.y) + math.abs(pos.z)
-    -- Add extra reserve for snake mining (we move up/down frequently)
-    local snakeMultiplier = CONFIG.useSnakeMining and 1.5 or 1
-    return math.ceil((distanceHome + CONFIG.fuelReserve) * snakeMultiplier)
+    return distanceHome + CONFIG.fuelReserve
 end
 
 --- Check if we have enough fuel to continue safely
@@ -686,8 +690,9 @@ local function mineSnakeStep(checkOres, placeTorch)
     end
 end
 
---- Mine a simple 2-tall tunnel step (legacy mode)
-local function mineSimpleTunnelStep(checkOres, placeTorch)
+--- Mine a simple 2-tall tunnel step with optional pokeholes
+-- Standard 1x2 tunnel (wiki-recommended) with pokehole technique for extra ore exposure
+local function mineSimpleTunnelStep(checkOres, placeTorch, stepNumber)
     -- Dig forward and move into the space
     digForwardAndMove()
     
@@ -706,9 +711,40 @@ local function mineSimpleTunnelStep(checkOres, placeTorch)
         end
     end
     
-    -- Check for ores if enabled
+    -- Check for ores if enabled (front, up, down)
     if checkOres then
         checkForOres()
+    end
+    
+    -- Pokehole mining: Every N blocks, dig 1-block holes to left and right
+    -- This exposes extra ore faces without mining full tunnels (wiki "Layout 6")
+    if CONFIG.usePokeholes and stepNumber and (stepNumber % CONFIG.pokeholeInterval == 0) then
+        -- Dig pokehole to the left
+        movement.turnLeft()
+        local leftBlock = miningUtils.inspectForward()
+        if leftBlock then
+            miningUtils.digForward()
+            stats.blocksMined = stats.blocksMined + 1
+            -- Check if we exposed ore in the pokehole
+            if checkOres and miningUtils.isOre(miningUtils.inspectForward()) then
+                miningUtils.checkAndMineOres(movement)
+            end
+        end
+        
+        -- Dig pokehole to the right (turn 180)
+        movement.turnAround()
+        local rightBlock = miningUtils.inspectForward()
+        if rightBlock then
+            miningUtils.digForward()
+            stats.blocksMined = stats.blocksMined + 1
+            -- Check if we exposed ore in the pokehole
+            if checkOres and miningUtils.isOre(miningUtils.inspectForward()) then
+                miningUtils.checkAndMineOres(movement)
+            end
+        end
+        
+        -- Turn back to face forward
+        movement.turnLeft()
     end
     
     -- Place torch if needed (and we have torches, and no torch already there)
@@ -724,11 +760,11 @@ local function mineSimpleTunnelStep(checkOres, placeTorch)
 end
 
 --- Mine a tunnel step using configured method
-local function mineTunnelStep(checkOres, placeTorch)
+local function mineTunnelStep(checkOres, placeTorch, stepNumber)
     if CONFIG.useSnakeMining then
         mineSnakeStep(checkOres, placeTorch)
     else
-        mineSimpleTunnelStep(checkOres, placeTorch)
+        mineSimpleTunnelStep(checkOres, placeTorch, stepNumber)
     end
 end
 
@@ -771,8 +807,8 @@ local function mineBranch(length)
             returnHomeAndDeposit()
         end
         
-        -- Mine one step forward
-        mineTunnelStep(CONFIG.checkOreVeins, placeTorch)
+        -- Mine one step forward (pass step number for pokehole timing)
+        mineTunnelStep(CONFIG.checkOreVeins, placeTorch, step)
         
         -- Update display periodically
         if step % 10 == 0 then
@@ -814,7 +850,8 @@ local function branchMine()
             if not hasSafeFuel() then
                 returnHomeAndDeposit()
             end
-            mineTunnelStep(true, step == CONFIG.branchSpacing + 1)
+            -- Main tunnel doesn't need pokeholes (branches cover those areas)
+            mineTunnelStep(true, step == CONFIG.branchSpacing + 1, nil)
         end
         
         -- Mine right branch
@@ -889,18 +926,22 @@ local function main()
     print(string.format("Branches per side: %d", CONFIG.branchCount))
     print(string.format("Branch spacing: %d", CONFIG.branchSpacing))
     if CONFIG.useSnakeMining then
-        print("Mining mode: SNAKE (1x3 tunnel, max ore exposure)")
+        print("Mining mode: SNAKE (1x3 tunnel)")
+    elseif CONFIG.usePokeholes then
+        print(string.format("Mining mode: POKEHOLE (1x2 tunnel + holes every %d blocks)", CONFIG.pokeholeInterval))
     else
         print("Mining mode: SIMPLE (1x2 tunnel)")
     end
     print("")
     
-    -- Check fuel (snake mining uses more fuel due to vertical movement)
+    -- Check fuel
     if not fuel.isUnlimited() then
-        local fuelMultiplier = CONFIG.useSnakeMining and 3 or 1  -- Snake uses ~3x fuel per step
-        local totalDistance = (CONFIG.branchLength * CONFIG.branchCount * 4 + 
-                              CONFIG.branchCount * CONFIG.branchSpacing * 2) * fuelMultiplier
-        print(string.format("Estimated fuel needed: %d", totalDistance))
+        -- Pokeholes add ~2 extra blocks mined per interval
+        local pokeholeExtra = CONFIG.usePokeholes and (CONFIG.branchLength / CONFIG.pokeholeInterval * 2) or 0
+        local totalDistance = CONFIG.branchLength * CONFIG.branchCount * 4 + 
+                              CONFIG.branchCount * CONFIG.branchSpacing * 2 +
+                              CONFIG.branchCount * 2 * pokeholeExtra
+        print(string.format("Estimated fuel needed: %d", math.ceil(totalDistance)))
         print(string.format("Current fuel: %d", fuel.getLevel()))
         
         if fuel.getLevel() < CONFIG.minFuelToStart then
