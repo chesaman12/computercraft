@@ -1,0 +1,319 @@
+---
+name: computercraft-lua
+description: Expert knowledge for developing CC:Tweaked ComputerCraft Lua scripts in Minecraft. Use when writing turtle automation, computer programs, rednet communication, peripheral control, or any Minecraft ComputerCraft code.
+---
+
+# ComputerCraft CC:Tweaked Development Skill
+
+I am an expert in developing Lua scripts for CC:Tweaked (ComputerCraft) mod in Minecraft. I help create turtle automation, computer programs, rednet networks, and peripheral integrations.
+
+## When to Use This Skill
+
+- Writing turtle automation scripts (mining, building, farming)
+- Creating computer programs for CC:Tweaked
+- Setting up rednet/modem communication between computers
+- Working with peripherals (monitors, modems, speakers, inventories)
+- Debugging ComputerCraft-specific issues
+- Understanding CC:Tweaked APIs and events
+
+## Core Knowledge
+
+### The CC:Tweaked Environment
+
+CC:Tweaked provides programmable computers and turtles in Minecraft:
+- **Computers**: Stationary terminals for running programs
+- **Turtles**: Mobile robots that can move, mine, build, and interact
+- **Pocket Computers**: Portable computers players can carry
+- **Peripherals**: External devices (monitors, modems, speakers, drives)
+
+### Lua Version
+CC:Tweaked 1.109.0+ uses **Lua 5.2**. Key differences from 5.1:
+- Use `...` for varargs (not `arg`)
+- Use `_ENV` for environments (not `getfenv/setfenv`)
+- No binary chunk support
+- `goto` statement available
+
+### API Categories
+
+#### 1. Turtle API (Robotic Control)
+```lua
+-- Movement (all return success, errorMessage)
+turtle.forward()    turtle.back()
+turtle.up()         turtle.down()
+turtle.turnLeft()   turtle.turnRight()
+
+-- World Interaction
+turtle.dig()        turtle.digUp()      turtle.digDown()
+turtle.place()      turtle.placeUp()    turtle.placeDown()
+turtle.attack()     turtle.attackUp()   turtle.attackDown()
+
+-- Inventory (16 slots)
+turtle.select(slot) -- 1-16
+turtle.getItemDetail(slot?)
+turtle.getItemCount(slot?)
+turtle.transferTo(slot, count?)
+turtle.drop(count?)     turtle.dropUp()     turtle.dropDown()
+turtle.suck(count?)     turtle.suckUp()     turtle.suckDown()
+
+-- Fuel System
+turtle.getFuelLevel()   -- number or "unlimited"
+turtle.getFuelLimit()
+turtle.refuel(count?)   -- consume fuel items in selected slot
+
+-- Inspection
+turtle.inspect()        -- returns success, blockData
+turtle.inspectUp()
+turtle.inspectDown()
+turtle.detect()         -- returns boolean
+turtle.detectUp()
+turtle.detectDown()
+
+-- Comparison
+turtle.compare()        -- compare block in front to selected slot
+turtle.compareUp()
+turtle.compareDown()
+turtle.compareTo(slot)  -- compare selected slot to another slot
+
+-- Crafting (requires crafty turtle)
+turtle.craft(limit?)
+```
+
+#### 2. Event System
+```lua
+-- Pull events (yields execution)
+local event, p1, p2, p3 = os.pullEvent(filter?)
+local event, ... = os.pullEventRaw(filter?)  -- catches terminate
+
+-- Common Events
+-- "key", keyCode, isHeld
+-- "key_up", keyCode
+-- "char", character
+-- "timer", timerId
+-- "alarm", alarmId
+-- "rednet_message", senderId, message, protocol
+-- "modem_message", side, channel, replyChannel, message, distance
+-- "turtle_inventory"
+-- "peripheral", side
+-- "peripheral_detach", side
+-- "redstone"
+-- "terminate"
+-- "mouse_click", button, x, y
+-- "monitor_touch", side, x, y
+```
+
+#### 3. Rednet Communication
+```lua
+-- Setup
+rednet.open("back")  -- open modem on specified side
+rednet.close()       -- close all modems
+
+-- Sending
+rednet.send(recipientId, message, protocol?)
+rednet.broadcast(message, protocol?)
+
+-- Receiving
+local senderId, message, protocol = rednet.receive(protocolFilter?, timeout?)
+
+-- DNS-like naming
+rednet.host(protocol, hostname)
+rednet.unhost(protocol)
+rednet.lookup(protocol, hostname?) -- returns id or table of ids
+```
+
+#### 4. Peripheral API
+```lua
+-- Discovery
+peripheral.getNames()           -- list all peripherals
+peripheral.isPresent(side)
+peripheral.getType(side)
+peripheral.find(type, filter?)  -- returns wrapped peripheral(s)
+
+-- Usage
+local p = peripheral.wrap(side)
+p.someMethod()
+-- or
+peripheral.call(side, "method", args...)
+
+-- Common peripheral types:
+-- "modem", "monitor", "speaker", "drive", "printer"
+-- "command" (command computer), "computer" (networked computer)
+-- "inventory" (chests, etc via generic peripheral)
+```
+
+#### 5. File System
+```lua
+-- Reading/Writing
+local file = fs.open("path", mode) -- "r", "w", "a", "rb", "wb", "ab"
+local content = file.readAll()
+file.write("data")
+file.writeLine("line")
+file.close()
+
+-- File Operations
+fs.exists(path)
+fs.isDir(path)
+fs.list(path)           -- returns table of names
+fs.makeDir(path)
+fs.delete(path)
+fs.move(from, to)
+fs.copy(from, to)
+fs.getSize(path)
+fs.getFreeSpace(path)
+```
+
+#### 6. HTTP (when enabled)
+```lua
+-- Synchronous
+local response = http.get(url, headers?, binary?)
+local body = response.readAll()
+response.close()
+
+local response = http.post(url, body, headers?, binary?)
+
+-- Asynchronous (fires http_success or http_failure events)
+http.request(url, body?, headers?, binary?, method?)
+
+-- WebSockets
+local ws = http.websocket(url, headers?)
+ws.send(message)
+local msg = ws.receive(timeout?)
+ws.close()
+```
+
+#### 7. Term & Display
+```lua
+term.write(text)
+term.clear()
+term.clearLine()
+term.setCursorPos(x, y)
+term.getCursorPos()
+term.getSize()
+term.setTextColor(color)
+term.setBackgroundColor(color)
+term.scroll(n)
+
+-- For monitors
+local mon = peripheral.wrap("top")
+mon.setTextScale(scale)  -- 0.5 to 5
+term.redirect(mon)       -- redirect output to monitor
+```
+
+#### 8. Parallel Execution
+```lua
+-- Run until any function completes
+parallel.waitForAny(func1, func2, ...)
+
+-- Run until all functions complete
+parallel.waitForAll(func1, func2, ...)
+```
+
+### Best Practices
+
+#### 1. Always Handle Failures
+```lua
+local function safeDig()
+    local success, err = turtle.dig()
+    if not success and err ~= "Nothing to dig here" then
+        print("Dig failed: " .. tostring(err))
+        return false
+    end
+    return true
+end
+```
+
+#### 2. Yield Regularly
+```lua
+-- Prevent "Too long without yielding" error
+for i = 1, 10000 do
+    doWork()
+    if i % 100 == 0 then
+        sleep(0)  -- minimal yield
+    end
+end
+```
+
+#### 3. Manage Fuel
+```lua
+local function ensureFuel(minLevel)
+    local fuel = turtle.getFuelLevel()
+    if fuel == "unlimited" then return true end
+    if fuel < minLevel then
+        for slot = 1, 16 do
+            turtle.select(slot)
+            if turtle.refuel(0) then  -- test if item is fuel
+                turtle.refuel()
+            end
+            if turtle.getFuelLevel() >= minLevel then
+                return true
+            end
+        end
+        return false
+    end
+    return true
+end
+```
+
+#### 4. Use Require for Modules
+```lua
+-- utils.lua
+local M = {}
+function M.log(msg)
+    print("[" .. os.date("%H:%M:%S") .. "] " .. msg)
+end
+return M
+
+-- main.lua
+local utils = require("utils")
+utils.log("Started")
+```
+
+#### 5. Startup Scripts
+```lua
+-- startup.lua (runs on boot)
+shell.run("bg_program")  -- run in background
+shell.run("main")        -- run main program
+```
+
+### Common Patterns
+
+#### Mining Turtle Pattern
+```lua
+local function mineForward()
+    while turtle.detect() do
+        turtle.dig()
+        sleep(0.4)  -- wait for gravel/sand
+    end
+    return turtle.forward()
+end
+```
+
+#### Event Server Pattern
+```lua
+rednet.open("back")
+rednet.host("myservice", "server1")
+
+while true do
+    local senderId, message, protocol = rednet.receive("myservice")
+    if message.type == "request" then
+        local response = handleRequest(message.data)
+        rednet.send(senderId, {type="response", data=response}, "myservice")
+    end
+end
+```
+
+#### GPS Locate Pattern
+```lua
+local x, y, z = gps.locate(5)  -- 5 second timeout
+if x then
+    print(("Position: %d, %d, %d"):format(x, y, z))
+else
+    print("GPS unavailable")
+end
+```
+
+## Resources
+
+- Official Wiki: https://tweaked.cc/
+- GitHub: https://github.com/cc-tweaked/CC-Tweaked
+- Workspace docs: `docs/cc-tweaked/`
+- Example scripts: `scripts/turtle/`, `scripts/computer/`
