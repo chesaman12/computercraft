@@ -3,25 +3,29 @@
 --
 -- Features:
 -- - Standard 1x2 tunnels (1 wide, 2 tall) as recommended by Minecraft Wiki
--- - Pokehole mining: Every 4 blocks, digs 1-block holes left and right to expose more ore
---   (This gives better blocks-revealed to blocks-mined ratio than wider tunnels)
+-- - Efficient human-like mining pattern: checks both floor and ceiling levels
+-- - Pokehole mining: Every 4 blocks, enters pokeholes and checks all 5 directions
+-- - Minimal turning: uses left/right checks instead of full 360 scans
+-- - Keeps fuel in inventory for mobile refueling
 -- - Branch spacing of 6 blocks for maximum efficiency (or 3 for balance)
--- - Checks all 6 directions for valuable ores and follows veins recursively
 -- - Tracks position and can return home safely
 -- - Manages inventory, discards junk, deposits valuables in chest
--- - Auto-refuels from inventory and chest
 -- - Places torches at regular intervals
 --
--- Mining Pattern (top-down view):
---   Main tunnel goes forward, branches go left/right
---   With pokeholes enabled, each branch looks like:
---     ═══╤═══╤═══╤═══  (main branch tunnel, 2 tall)
---        │   │   │     (pokeholes every 4 blocks, 1 tall, expose extra ore faces)
+-- Mining Pattern per step (mimics efficient human mining):
+--   1. At floor level: check below, left, right for ore
+--   2. Dig up, move up to head height
+--   3. At head height: check left, right, ceiling for ore
+--   4. Move down to floor
+--   5. Place torch above (if interval reached)
+--   6. If pokehole step: dig left, ENTER pokehole, check 5 directions, return
+--   7. If pokehole step: dig right, ENTER pokehole, check 5 directions, return
+--   8. Dig forward and advance
 --
 -- Efficiency (from wiki MATLAB analysis):
 -- - Spacing 6: Maximum efficiency, ~1.7% of blocks are diamond
 -- - Spacing 3: Good balance of efficiency and thoroughness
--- - Pokeholes: Reveal more blocks without mining full tunnels
+-- - Pokeholes with exploration: Maximum ore face exposure
 --
 -- Usage: smart_miner <length> [branches] [spacing]
 --   length:  How far each branch extends (default: 50)
@@ -407,9 +411,16 @@ local function depositAndRestock()
             if turtle.suck(64) then
                 -- Got an item, check if it's fuel
                 if turtle.refuel(0) then
-                    -- It's fuel! Consume it immediately
-                    turtle.refuel()
-                    print(string.format("Refueled! Fuel: %d", fuel.getLevel()))
+                    -- It's fuel! Keep ONE STACK in inventory for mobile refueling
+                    -- Only consume what we need right now
+                    local neededFuel = CONFIG.minFuelToStart - fuel.getLevel()
+                    if neededFuel > 0 then
+                        -- Try to refuel just what we need
+                        turtle.refuel()
+                        print(string.format("Refueled! Fuel: %d", fuel.getLevel()))
+                    end
+                    -- Keep the fuel stack - don't mark it for return!
+                    -- This allows mobile refueling while mining
                 else
                     -- Not fuel - keep it in inventory for now, don't put back yet
                     -- This prevents pulling the same item repeatedly
@@ -421,13 +432,14 @@ local function depositAndRestock()
             end
         end
         
-        -- Now put all non-fuel items back into chest
+        -- Now put all non-fuel items back into chest (but KEEP fuel!)
         for _, slot in ipairs(nonFuelSlots) do
             if turtle.getItemCount(slot) > 0 then
                 turtle.select(slot)
                 turtle.drop()
             end
         end
+        -- Note: Fuel stacks are NOT in nonFuelSlots, so they stay in inventory
         
         -- Also drop any other non-fuel items that might be in inventory
         for slot = 1, 15 do
@@ -523,68 +535,82 @@ local function digDownBlock()
     return false
 end
 
---- Check for ores in all directions and mine veins
--- Checks all 6 directions (front, back, left, right, up, down)
--- and recursively mines any ore veins found
-local function checkForOres()
+--- Check for ore and mine vein if found
+-- Helper function to reduce code duplication
+local function checkAndMineOre(inspectFunc, digFunc, moveFunc, returnFunc)
     if not CONFIG.checkOreVeins then return 0 end
     
-    local oresFound = 0
-    
-    -- Check front - use recursive vein mining
-    local front = miningUtils.inspectForward()
-    if miningUtils.isOre(front) then
-        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
-        stats.oresMined = stats.oresMined + 1
+    local block = inspectFunc()
+    if miningUtils.isOre(block) then
+        digFunc()
+        if moveFunc then
+            moveFunc()
+            local mined = miningUtils.checkAndMineOres(movement)
+            if returnFunc then returnFunc() end
+            stats.oresMined = stats.oresMined + 1 + mined
+            return 1 + mined
+        else
+            stats.oresMined = stats.oresMined + 1
+            return 1
+        end
     end
-    
-    -- Check back (behind us)
-    movement.turnAround()
-    local back = miningUtils.inspectForward()
-    if miningUtils.isOre(back) then
-        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
-        stats.oresMined = stats.oresMined + 1
-    end
-    movement.turnAround()  -- Face forward again
-    
-    -- Check left
+    return 0
+end
+
+--- Check left wall for ore (efficient: single turn)
+local function checkLeftOre()
     movement.turnLeft()
-    local left = miningUtils.inspectForward()
-    if miningUtils.isOre(left) then
-        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
-        stats.oresMined = stats.oresMined + 1
-    end
-    
-    -- Check right (turn 180 from left)
-    movement.turnAround()
-    local right = miningUtils.inspectForward()
-    if miningUtils.isOre(right) then
-        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
-        stats.oresMined = stats.oresMined + 1
-    end
-    movement.turnLeft()  -- Face forward again
-    
-    -- Check up
-    local up = miningUtils.inspectUp()
-    if miningUtils.isOre(up) then
-        miningUtils.digUp()
-        movement.up(false)
-        oresFound = oresFound + 1 + miningUtils.checkAndMineOres(movement)
-        movement.down(false)
-        stats.oresMined = stats.oresMined + 1
-    end
-    
-    -- Check down  
-    local down = miningUtils.inspectDown()
-    if miningUtils.isOre(down) then
-        miningUtils.digDown()
-        movement.down(false)
-        oresFound = oresFound + 1 + miningUtils.checkAndMineOres(movement)
-        movement.up(false)
-        stats.oresMined = stats.oresMined + 1
-    end
-    
-    return oresFound
+    local result = checkAndMineOre(
+        miningUtils.inspectForward,
+        function() miningUtils.digForward() end,
+        function() movement.forward(false) end,
+        function() movement.back() end
+    )
+    movement.turnRight()
+    return result
+end
+
+--- Check right wall for ore (efficient: single turn)
+local function checkRightOre()
+    movement.turnRight()
+    local result = checkAndMineOre(
+        miningUtils.inspectForward,
+        function() miningUtils.digForward() end,
+        function() movement.forward(false) end,
+        function() movement.back() end
+    )
+    movement.turnLeft()
+    return result
+end
+
+--- Check block below for ore
+local function checkDownOre()
+    return checkAndMineOre(
+        miningUtils.inspectDown,
+        function() miningUtils.digDown() end,
+        function() movement.down(false) end,
+        function() movement.up(false) end
+    )
+end
+
+--- Check block above for ore
+local function checkUpOre()
+    return checkAndMineOre(
+        miningUtils.inspectUp,
+        function() miningUtils.digUp() end,
+        function() movement.up(false) end,
+        function() movement.down(false) end
+    )
+end
+
+--- Check block in front for ore
+local function checkFrontOre()
+    return checkAndMineOre(
+        miningUtils.inspectForward,
+        function() miningUtils.digForward() end,
+        function() movement.forward(false) end,
+        function() movement.back() end
+    )
 end
 
 --- Check if there's already a torch above
@@ -690,67 +716,105 @@ local function mineSnakeStep(checkOres, placeTorch)
     end
 end
 
---- Mine a simple 2-tall tunnel step with optional pokeholes
--- Standard 1x2 tunnel (wiki-recommended) with pokehole technique for extra ore exposure
+--- Explore a pokehole: enter it and check all 5 directions for ore
+-- @param direction string "left" or "right"
+local function explorePokeholeOres()
+    -- Inside the pokehole, check all 5 directions:
+    -- front (deeper into wall), left, right, up, down
+    checkFrontOre()
+    checkLeftOre()
+    checkRightOre()
+    checkUpOre()
+    checkDownOre()
+end
+
+--- Mine a tunnel step mimicking efficient human mining pattern
+-- Pattern per step:
+--   1. At floor: check below, left, right
+--   2. Dig up and move up to head height
+--   3. At head height: check left, right, ceiling
+--   4. Move down to floor
+--   5. Place torch above if needed
+--   6. If pokehole step: dig left pokehole, enter, check 5 dirs, return
+--   7. If pokehole step: dig right pokehole, enter, check 5 dirs, return
+--   8. Dig forward and move forward
 local function mineSimpleTunnelStep(checkOres, placeTorch, stepNumber)
-    -- Dig forward and move into the space
-    digForwardAndMove()
-    
-    -- Check if there's a torch above before digging
-    -- If there's already a torch, we're in an existing tunnel - skip digging up
+    -- Check if there's a torch above (existing tunnel)
     local existingTorch = hasTorchAbove()
     
-    if not existingTorch then
-        -- ALWAYS dig up to ensure 2-block tall tunnel
-        -- This handles cases where gravel falls after we move
-        miningUtils.digUp()
-        if turtle.detectUp() then
-            -- Still blocked? Try again (handles gravel)
-            miningUtils.digUp()
-            stats.blocksMined = stats.blocksMined + 1
-        end
-    end
-    
-    -- Check for ores if enabled (front, up, down)
+    -- === FLOOR LEVEL CHECKS ===
     if checkOres then
-        checkForOres()
+        -- Check below (floor ore)
+        checkDownOre()
+        -- Check left wall at floor level
+        checkLeftOre()
+        -- Check right wall at floor level
+        checkRightOre()
     end
     
-    -- Pokehole mining: Every N blocks, dig 1-block holes to left and right
-    -- This exposes extra ore faces without mining full tunnels (wiki "Layout 6")
-    if CONFIG.usePokeholes and stepNumber and (stepNumber % CONFIG.pokeholeInterval == 0) then
-        -- Dig pokehole to the left
-        movement.turnLeft()
-        local leftBlock = miningUtils.inspectForward()
-        if leftBlock then
-            miningUtils.digForward()
-            stats.blocksMined = stats.blocksMined + 1
-            -- Check if we exposed ore in the pokehole
-            if checkOres and miningUtils.isOre(miningUtils.inspectForward()) then
-                miningUtils.checkAndMineOres(movement)
-            end
-        end
-        
-        -- Dig pokehole to the right (turn 180)
-        movement.turnAround()
-        local rightBlock = miningUtils.inspectForward()
-        if rightBlock then
-            miningUtils.digForward()
-            stats.blocksMined = stats.blocksMined + 1
-            -- Check if we exposed ore in the pokehole
-            if checkOres and miningUtils.isOre(miningUtils.inspectForward()) then
-                miningUtils.checkAndMineOres(movement)
-            end
-        end
-        
-        -- Turn back to face forward
-        movement.turnLeft()
+    -- === MOVE UP TO HEAD HEIGHT ===
+    if not existingTorch then
+        miningUtils.digUp()
+        stats.blocksMined = stats.blocksMined + 1
+    end
+    movement.up(false)
+    
+    -- === HEAD HEIGHT CHECKS ===
+    if checkOres then
+        -- Check left wall at head height
+        checkLeftOre()
+        -- Check right wall at head height
+        checkRightOre()
+        -- Check ceiling
+        checkUpOre()
     end
     
-    -- Place torch if needed (and we have torches, and no torch already there)
+    -- === MOVE BACK DOWN TO FLOOR ===
+    movement.down(false)
+    
+    -- === PLACE TORCH ===
     if placeTorch and getTorchCount() > 0 and not existingTorch then
         turtle.select(CONFIG.torchSlot)
         turtle.placeUp()
+    end
+    
+    -- === POKEHOLE MINING ===
+    -- Every N blocks, dig pokeholes and explore them for ore
+    if CONFIG.usePokeholes and stepNumber and (stepNumber % CONFIG.pokeholeInterval == 0) then
+        -- Left pokehole: dig, enter, check all directions, return
+        movement.turnLeft()
+        if turtle.detect() then
+            miningUtils.digForward()
+            stats.blocksMined = stats.blocksMined + 1
+        end
+        movement.forward(true)  -- Enter the pokehole
+        if checkOres then
+            explorePokeholeOres()
+        end
+        movement.back()  -- Return to tunnel
+        movement.turnRight()  -- Face forward
+        
+        -- Right pokehole: dig, enter, check all directions, return
+        movement.turnRight()
+        if turtle.detect() then
+            miningUtils.digForward()
+            stats.blocksMined = stats.blocksMined + 1
+        end
+        movement.forward(true)  -- Enter the pokehole
+        if checkOres then
+            explorePokeholeOres()
+        end
+        movement.back()  -- Return to tunnel
+        movement.turnLeft()  -- Face forward
+    end
+    
+    -- === DIG FORWARD AND ADVANCE ===
+    digForwardAndMove()
+    
+    -- Ensure headroom (handle gravel that may have fallen)
+    if not hasTorchAbove() and turtle.detectUp() then
+        miningUtils.digUp()
+        stats.blocksMined = stats.blocksMined + 1
     end
     
     -- Periodic cleanup
