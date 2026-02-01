@@ -1013,27 +1013,50 @@ local function mineInternalBranches()
     print(string.format("Branches: %d (spaced %d blocks apart)", numBranches, CONFIG.branchSpacing))
     print(string.format("Branch length: %d blocks each", branchLength))
     print(string.format("Starting offset: %d blocks from edge", startOffset))
+    
+    -- Sanity check
+    if numBranches < 1 then
+        print("ERROR: No branches to mine (numBranches < 1)!")
+        return
+    end
+    if branchLength < 1 then
+        print("ERROR: Branch length too short (branchLength < 1)!")
+        return
+    end
+    
     sleep(1)
     
     -- We're at origin (southwest corner) facing east
     -- Need to move to the first branch starting position:
     -- - startOffset blocks east (into the interior, leaving proper gap from west wall)
     -- - startOffset blocks north (leaving proper gap from south wall)
+    -- This area is UNMINED (interior of square), so we need to mine our way in
     
     print(string.format("Moving to first branch position (%d blocks in)...", startOffset))
+    print("Step 1: Mining east into square...")
     
-    -- Move east into the square
+    -- Mine east into the square (2-tall tunnel through unmined interior)
     for i = 1, startOffset do
+        print(string.format("  East step %d/%d", i, startOffset))
+        miningUtils.digForward()   -- Dig block in front at floor level
+        turtle.digUp()             -- Dig block above (head height)
         movement.forward(true)
     end
     
-    -- Turn north and move to first branch row
+    -- Turn north and mine to first branch row
+    print("Step 2: Turning north...")
     movement.turnLeft()
+    
+    print("Step 3: Mining north to first branch row...")
     for i = 1, startOffset do
+        print(string.format("  North step %d/%d", i, startOffset))
+        miningUtils.digForward()   -- Dig block in front at floor level
+        turtle.digUp()             -- Dig block above (head height)
         movement.forward(true)
     end
     
     -- Turn east to start first branch
+    print("Step 4: Turning east, ready for first branch...")
     movement.turnRight()
     
     -- Now we're at the starting position for branch 1, facing east
@@ -1065,11 +1088,14 @@ local function mineInternalBranches()
                 movement.turnRight()
             end
             
-            -- Move north by spacing + 1 blocks (spacing between + the new row)
-            print(string.format("Moving north to branch %d...", branchNum))
+            -- Mine north by spacing + 1 blocks to reach the next branch row
+            -- This is through UNMINED stone between branches
+            print(string.format("Mining north to branch %d...", branchNum))
             for step = 1, CONFIG.branchSpacing + 1 do
                 if not hasSafeFuel() then returnHomeAndDeposit() end
-                movement.forward(true)  -- Walk through already-cleared perimeter area
+                miningUtils.digForward()   -- Dig at floor level
+                turtle.digUp()             -- Dig at head height  
+                movement.forward(true)
             end
             
             -- Turn to face the mining direction for this branch
