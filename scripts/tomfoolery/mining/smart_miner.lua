@@ -347,12 +347,19 @@ local function depositAndRestock()
     -- Drop junk first to make room
     inventory.dropJunk()
     
-    -- Dump inventory into chest (keep slot 16 for torches)
+    -- Dump inventory into chest (keep slot 16 for torches, keep fuel for mobile refueling)
     for slot = 1, 15 do
         local detail = turtle.getItemDetail(slot)
         if detail then
             turtle.select(slot)
-            turtle.drop()
+            -- Check if this item is fuel - if so, keep it!
+            if not turtle.refuel(0) then
+                -- Not fuel, deposit it
+                turtle.drop()
+            else
+                -- It's fuel - keep in inventory for mobile refueling
+                print(string.format("Keeping fuel in slot %d: %s", slot, detail.name))
+            end
         end
     end
     
