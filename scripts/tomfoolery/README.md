@@ -180,14 +180,27 @@ To find a block's ID for configuration:
 
 Or press F3 in-game and look at a block to see its ID.
 
+## Running Scripts
+
+**Important:** Always run scripts from the tomfoolery root directory, not from subdirectories.
+
+```bash
+# CORRECT - Run from tomfoolery root:
+cd /tomfoolery
+mining/smart_miner 50
+
+# WRONG - Don't cd into subdirectories:
+cd /tomfoolery/mining
+smart_miner 50   -- This will cause "module not found" errors!
+```
+
+This is because CC:Tweaked's `require()` resolves paths relative to the running script's location.
+
 ## Using the Libraries
 
-From any script in the tomfoolery folder:
+Scripts in the root tomfoolery folder can use libraries directly:
 
 ```lua
--- Add package path for common libraries
-package.path = package.path .. ";/tomfoolery/?.lua"
-
 -- Load modules
 local movement = require("common.movement")
 local inventory = require("common.inventory")
@@ -196,6 +209,23 @@ local fuel = require("common.fuel")
 local config = require("common.config")
 
 -- Your code here
+```
+
+Scripts in subdirectories (like `mining/`) need path setup. See the boilerplate in `smart_miner.lua`:
+
+```lua
+-- Path setup for scripts in subdirectories
+local function setupPaths()
+    local scriptPath = shell.getRunningProgram()
+    local scriptDir = scriptPath:match("(.*/)" ) or ""
+    local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
+    package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
+    return rootDir
+end
+local ROOT_DIR = setupPaths()
+
+-- Now require works normally
+local movement = require("common.movement")
 ```
 
 ### Reloading Configuration
@@ -232,10 +262,36 @@ return M
 
 ### Creating Task Scripts
 
-Create scripts in appropriate folders:
+For scripts in the root folder:
+
+```lua
+-- tomfoolery/my_script.lua
+local movement = require("common.movement")
+local inventory = require("common.inventory")
+
+local function main()
+    -- Your logic
+end
+
+main()
+```
+
+For scripts in subdirectories (like `mining/`):
 
 ```lua
 -- mining/my_miner.lua
+
+-- Path setup (required for subdirectory scripts)
+local function setupPaths()
+    local scriptPath = shell.getRunningProgram()
+    local scriptDir = scriptPath:match("(.*/)" ) or ""
+    local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
+    package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
+    return rootDir
+end
+local ROOT_DIR = setupPaths()
+
+-- Now load modules normally
 local movement = require("common.movement")
 local inventory = require("common.inventory")
 

@@ -12,7 +12,35 @@
 --   branches: Number of branches on each side (default: 5)
 --   spacing: Blocks between branches (default: 3, optimal for ore exposure)
 --
+-- IMPORTANT: Run from the root installation directory (where common/ is):
+--   mining/smart_miner 50
+--
 -- @script smart_miner
+
+-- ============================================
+-- PATH SETUP - Required for require() to work
+-- ============================================
+-- This finds the root directory and adds it to package.path
+-- so that require("common.movement") works correctly
+local function setupPaths()
+    local scriptPath = shell.getRunningProgram()
+    local scriptDir = scriptPath:match("(.*/)" ) or ""
+    
+    -- Go up one directory from mining/ to find common/
+    local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
+    
+    -- If we're already at root (no subdirectory), use current dir
+    if rootDir == "" and not scriptDir:match("/") then
+        rootDir = ""
+    end
+    
+    -- Add root to package path
+    package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
+    
+    return rootDir
+end
+
+local ROOT_DIR = setupPaths()
 
 -- Load modules from common library
 local movement = require("common.movement")

@@ -26,6 +26,7 @@ local baseUrl = string.format(
 -- ============================================
 local files = {
     -- Common libraries (required)
+    { path = "common/init.lua",      required = true },
     { path = "common/movement.lua",  required = true },
     { path = "common/inventory.lua", required = true },
     { path = "common/mining.lua",    required = true },

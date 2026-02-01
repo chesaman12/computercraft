@@ -163,8 +163,10 @@ If you're using mods with custom ores:
 
 #### Step 5: Run the Script
 
+**IMPORTANT:** Always run scripts from the root installation directory (where `common/`, `mining/`, `config/` folders are). Do NOT `cd` into the `mining/` folder first.
+
 ```
-smart_miner <length> [branches] [spacing]
+mining/smart_miner <length> [branches] [spacing]
 ```
 
 **Parameters:**
@@ -177,9 +179,9 @@ smart_miner <length> [branches] [spacing]
 **Examples:**
 
 ```
-smart_miner 50          -- 50-block branches, 5 per side, spacing 3
-smart_miner 100 10      -- 100-block branches, 10 per side
-smart_miner 30 8 2      -- 30-block branches, 8 per side, spacing 2
+mining/smart_miner 50          -- 50-block branches, 5 per side, spacing 3
+mining/smart_miner 100 10      -- 100-block branches, 10 per side
+mining/smart_miner 30 8 2      -- 30-block branches, 8 per side, spacing 2
 ```
 
 ### Behavior

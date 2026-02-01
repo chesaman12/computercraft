@@ -310,6 +310,38 @@ All agents should generate code compatible with:
 - **CC:Tweaked Lua 5.2** syntax
 - **Module pattern:** `local M = {} ... return M`
 
+### Module Path Requirements
+
+**CRITICAL:** CC:Tweaked's `require()` resolves paths relative to the running script's directory, NOT the current working directory. Scripts in subdirectories (like `mining/`) must set up the package path to find `common/` modules.
+
+**Required boilerplate for scripts in subdirectories:**
+
+```lua
+-- PATH SETUP - Add at the top of any script that uses common modules
+local function setupPaths()
+    local scriptPath = shell.getRunningProgram()
+    local scriptDir = scriptPath:match("(.*/)" ) or ""
+    local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
+    package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
+    return rootDir
+end
+setupPaths()
+
+-- Now require() will find common modules
+local movement = require("common.movement")
+```
+
+**User instruction:** Scripts should be run from the root installation directory:
+
+```
+-- CORRECT: Run from root
+mining/smart_miner 50
+
+-- WRONG: Don't cd into subdirectories
+cd mining
+smart_miner 50  -- This will fail to find common/
+```
+
 ## Maintenance Tasks
 
 ### Updating the Installer

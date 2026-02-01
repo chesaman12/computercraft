@@ -296,11 +296,35 @@ end
 
 **Cause:** `require()` can't find the module.
 
+**Explanation:** In CC:Tweaked, `require()` resolves paths relative to the **running script's directory**, not the current working directory. If you run `mining/smart_miner.lua`, it will look for `mining/common/movement.lua` instead of `common/movement.lua`.
+
 **Solutions:**
 
-1. Check file exists at the expected path
-2. In CC:Tweaked, ensure you're in the correct directory
-3. Check `package.path` includes your directories
+1. **Run scripts from the root directory:**
+
+    ```
+    -- CORRECT
+    mining/smart_miner 50
+
+    -- WRONG (don't cd into subdirectories)
+    cd mining
+    smart_miner 50
+    ```
+
+2. **Add path setup boilerplate** to scripts in subdirectories:
+
+    ```lua
+    local function setupPaths()
+        local scriptPath = shell.getRunningProgram()
+        local scriptDir = scriptPath:match("(.*/)" ) or ""
+        local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
+        package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
+    end
+    setupPaths()
+    ```
+
+3. Check file exists at the expected path
+4. Check `package.path` includes your directories
 
 ### "too long without yielding"
 
