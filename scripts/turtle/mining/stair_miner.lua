@@ -10,6 +10,7 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 
 local input = require("common.input")
 local movement = require("common.movement")
+local logger = require("common.logger")
 
 local function beginUp()
     movement.digUntilEmpty()
@@ -34,6 +35,7 @@ end
 local function main()
     local distance = input.readNumber("Distance (digs forward and alternates up/down): ")
     
+    logger.logParams("stair_miner", { distance = distance })
     print("Mining staircase for " .. distance .. " steps...")
     
     for i = 1, distance do

@@ -12,11 +12,14 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 local input = require("common.input")
 local movement = require("common.movement")
 local inventory = require("common.inventory")
+local logger = require("common.logger")
 
 -- Get dimensions from user
 local width = input.readNumber("Width: ")
 local length = input.readNumber("Length: ")
 local height = input.readNumber("Height: ")
+
+logger.logParams("wall", { width = width, length = length, height = height })
 
 local slot = 1
 

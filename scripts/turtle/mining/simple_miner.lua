@@ -11,6 +11,7 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 
 local input = require("common.input")
 local fuel = require("common.fuel")
+local logger = require("common.logger")
 
 print("Torches in slot 15 (optional)")
 print("Fuel in slot 16 (optional)")
@@ -18,6 +19,8 @@ print("Fuel in slot 16 (optional)")
 local xSize = input.readNumber("Length (x): ")
 local ySize = input.readNumber("Height (y): ")
 local zSize = input.readNumber("Width (z, even numbers more efficient): ")
+
+logger.logParams("simple_miner", { length = xSize, height = ySize, width = zSize })
 
 -- Direction tracking: 0 = South, 1 = West, 2 = North, 3 = East
 local iDirection = 0

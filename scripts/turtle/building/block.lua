@@ -12,6 +12,7 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 local input = require("common.input")
 local movement = require("common.movement")
 local inventory = require("common.inventory")
+local logger = require("common.logger")
 
 -- Get dimensions from user
 local length = input.readNumber("Length: ")
@@ -19,6 +20,8 @@ local width = input.readNumber("Width: ")
 local height = input.readNumber("Height: ")
 write("Direction (l, r): ")
 local turn = input.normalizeLeftRight(read())
+
+logger.logParams("block", { length = length, width = width, height = height, turn = turn })
 
 local slot = 1
 
