@@ -13,7 +13,7 @@
 -- ============================================
 local GITHUB_USER = "chesaman12"  -- Change this to your GitHub username
 local GITHUB_REPO = "computercraft"   -- Change this to your repo name
-local GITHUB_BRANCH = "main"          -- Change if using different branch
+local GITHUB_BRANCH = "tom-branch"    -- Change if using different branch (e.g., "main")
 
 -- Base URL for raw GitHub content
 local baseUrl = string.format(

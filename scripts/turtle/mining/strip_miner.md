@@ -27,7 +27,7 @@ Every successful `turtle.forward()` increments the corresponding axis. Vertical 
 ## High-level algorithm
 
 1. Show a pre-prompt hint about odd/even corridor counts.
-2. Read parameters (`corridorLength`, `corridorCount`, `gap`, `mineRight`, `showLogs`, `enableTorches`, `torchInterval`, `fuelReserve`, `invThreshold`, `enableOreMining`, `enablePokeholes`, `pokeholeInterval`, `returnHome`, `fullMode`).
+2. Read parameters (`useDefaults`, `corridorLength`, `corridorCount`, `gap`, `mineRight`, `showLogs`, `enableTorches`, `torchInterval`, `fuelReserve`, `invThreshold`, `enableOreMining`, `enablePokeholes`, `pokeholeInterval`, `returnHome`, `fullMode`).
 3. Show efficiency tips based on corridor count (odd vs even, repositioning moves).
 4. Estimate required fuel and call `fuel.ensureFuel(...)`.
 5. **Phase 1**: Mine the perimeter rectangle (bottom bar → far corridor → top bar → near corridor).
@@ -42,6 +42,7 @@ Every successful `turtle.forward()` increments the corresponding axis. Vertical 
 - `gap`: Rock gap between corridors.
 - `mineRight`: Expand to the right (+X) or left (-X).
 - `showLogs`: Log output vs live status screen.
+- `useDefaults`: Use default sizing and settings (30 length, 10 corridors).
 - `enableTorches` + `torchInterval`: Place torches every N blocks.
 - `fuelReserve`: Minimum fuel buffer above distance home.
 - `invThreshold`: Return when empty slots are at or below this number.
@@ -107,7 +108,7 @@ This creates a 1-wide, 2-tall corridor without changing the horizontal path.
 
 When inventory reaches the empty-slot threshold:
 
-- Always try `dropJunk()` first (torches and fuel slots are preserved).
+- Always try `dropJunk()` first (fuel stays in slot 15, torches stay in slot 16).
 - If still full:
   - `1`: Pause and wait for user.
   - `2`: Return to chest at start, dump, then resume at previous location.
@@ -119,6 +120,10 @@ When inventory reaches the empty-slot threshold:
 - During mining: auto-refuel from inventory to maintain `fuelReserve` above the distance home.
 - If still low, return home to restock and resume; if return-home is disabled, stop with a warning.
 - If supplies are missing at the chest, the turtle waits for the user to restock.
+
+## Return home and deposit
+
+- If `returnHome` is enabled and the turtle can return safely, it returns to the start and dumps remaining inventory into the chest behind the turtle.
 
 ## Torch handling
 
