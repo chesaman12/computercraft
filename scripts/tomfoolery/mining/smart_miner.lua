@@ -171,7 +171,17 @@ local function hasSafeFuel()
     if fuel.isUnlimited() then
         return true
     end
-    return fuel.getLevel() >= fuelNeededToReturnHome()
+    
+    -- First, try to refuel from inventory before deciding fuel is low
+    local currentFuel = fuel.getLevel()
+    local needed = fuelNeededToReturnHome()
+    
+    if currentFuel < needed then
+        -- Try to refuel from inventory first
+        fuel.autoRefuel(needed)
+    end
+    
+    return fuel.getLevel() >= needed
 end
 
 --- Idle and wait for resources (fuel or torches)
@@ -321,16 +331,15 @@ local function depositAndRestock()
     if needFuel then
         print("Looking for fuel in chest...")
         
-        -- Try to suck fuel items into slot 1
-        turtle.select(1)
+        -- Strategy: Pull items from chest, keep fuel items, hold non-fuel temporarily
+        -- Only put non-fuel back AFTER we've searched the whole chest
+        -- This prevents the "pull same item repeatedly" bug
         
-        -- Keep trying to get items until we have enough fuel or chest is empty
-        local attempts = 0
-        local maxAttempts = 27  -- Max chest slots
+        local nonFuelSlots = {}  -- Track which slots have non-fuel items to return
+        local chestEmpty = false
         
-        while fuel.getLevel() < CONFIG.minFuelToStart and attempts < maxAttempts do
-            attempts = attempts + 1
-            
+        -- Pull items until chest is empty or we have enough fuel
+        while not chestEmpty and fuel.getLevel() < CONFIG.minFuelToStart do
             -- Find an empty slot to pull into
             local emptySlot = nil
             for slot = 1, 15 do
@@ -341,41 +350,64 @@ local function depositAndRestock()
             end
             
             if not emptySlot then
-                -- Inventory full, try to refuel from what we have
+                -- Inventory full, consume any fuel we found
                 fuel.autoRefuel(CONFIG.minFuelToStart)
-                -- Drop non-fuel items back
+                
+                -- Now drop non-fuel items to make room and continue
                 for slot = 1, 15 do
-                    turtle.select(slot)
-                    if turtle.getItemCount(slot) > 0 and not turtle.refuel(0) then
-                        turtle.drop()
+                    if turtle.getItemCount(slot) > 0 then
+                        turtle.select(slot)
+                        if not turtle.refuel(0) then
+                            turtle.drop()
+                        end
                     end
                 end
-                break
+                
+                -- Check again for empty slot
+                for slot = 1, 15 do
+                    if turtle.getItemCount(slot) == 0 then
+                        emptySlot = slot
+                        break
+                    end
+                end
+                
+                if not emptySlot then
+                    -- Still full (all fuel?), we're done
+                    break
+                end
             end
             
             turtle.select(emptySlot)
             if turtle.suck(64) then
                 -- Got an item, check if it's fuel
                 if turtle.refuel(0) then
-                    -- It's fuel! Consume it
+                    -- It's fuel! Consume it immediately
                     turtle.refuel()
                     print(string.format("Refueled! Fuel: %d", fuel.getLevel()))
                 else
-                    -- Not fuel, put it back immediately
-                    turtle.drop()
+                    -- Not fuel - keep it in inventory for now, don't put back yet
+                    -- This prevents pulling the same item repeatedly
+                    table.insert(nonFuelSlots, emptySlot)
                 end
             else
-                -- Chest is empty or can't suck more
-                break
+                -- Chest is empty
+                chestEmpty = true
             end
         end
         
-        -- Drop any remaining non-fuel items back into chest
+        -- Now put all non-fuel items back into chest
+        for _, slot in ipairs(nonFuelSlots) do
+            if turtle.getItemCount(slot) > 0 then
+                turtle.select(slot)
+                turtle.drop()
+            end
+        end
+        
+        -- Also drop any other non-fuel items that might be in inventory
         for slot = 1, 15 do
             local detail = turtle.getItemDetail(slot)
             if detail then
                 turtle.select(slot)
-                -- Only drop if it's not fuel
                 if not turtle.refuel(0) then
                     turtle.drop()
                 end
@@ -507,18 +539,33 @@ local function checkForOres()
     return oresFound
 end
 
+--- Check if there's already a torch above
+local function hasTorchAbove()
+    local success, block = turtle.inspectUp()
+    if success then
+        return block.name:match("torch") ~= nil
+    end
+    return false
+end
+
 --- Mine a 2-tall tunnel forward
 local function mineTunnelStep(checkOres, placeTorch)
     -- Dig forward and move into the space
     digForwardAndMove()
     
-    -- ALWAYS dig up to ensure 2-block tall tunnel
-    -- This handles cases where gravel falls after we move
-    miningUtils.digUp()
-    if turtle.detectUp() then
-        -- Still blocked? Try again (handles gravel)
+    -- Check if there's a torch above before digging
+    -- If there's already a torch, we're in an existing tunnel - skip digging up
+    local existingTorch = hasTorchAbove()
+    
+    if not existingTorch then
+        -- ALWAYS dig up to ensure 2-block tall tunnel
+        -- This handles cases where gravel falls after we move
         miningUtils.digUp()
-        stats.blocksMined = stats.blocksMined + 1
+        if turtle.detectUp() then
+            -- Still blocked? Try again (handles gravel)
+            miningUtils.digUp()
+            stats.blocksMined = stats.blocksMined + 1
+        end
     end
     
     -- Check for ores if enabled
@@ -526,8 +573,8 @@ local function mineTunnelStep(checkOres, placeTorch)
         checkForOres()
     end
     
-    -- Place torch if needed (and we have torches)
-    if placeTorch and getTorchCount() > 0 then
+    -- Place torch if needed (and we have torches, and no torch already there)
+    if placeTorch and getTorchCount() > 0 and not existingTorch then
         turtle.select(CONFIG.torchSlot)
         turtle.placeUp()
     end
