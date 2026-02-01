@@ -105,6 +105,31 @@ mymodule.doSomething()
 - Refuel from inventory: `turtle.refuel()`
 - Check fuel: `if turtle.getFuelLevel() < 100 then ... end`
 
+## Setup, Packaging, and Loading Scripts
+
+### Packaging Conventions
+- Keep each program in a dedicated folder with a clear entry point (e.g., `startup`, `startup.lua`, or `main.lua`).
+- Put reusable code in modules and load with `require`. Prefer shallow folder structures to keep `require` paths simple.
+- Avoid spaces in filenames to make `wget`/`pastebin` usage painless.
+
+### Loading Scripts into the Game (Choose One)
+
+1) Pastebin (quickest for single files)
+- Upload from dev machine: `pastebin put <file.lua>` and note the returned ID
+- In-game: `pastebin get <id> <file.lua>` or `pastebin run <id>`
+
+2) Local HTTP server (best for multiple files)
+- Host from dev machine: `python -m http.server` (or any static server)
+- In-game: `wget http://<host>:8000/path/file.lua file.lua`
+- Requires HTTP enabled in CC:Tweaked config (Pastebin also uses HTTP)
+
+3) World save copy (fastest for bulk sync)
+- Copy files directly into `saves/<world>/computercraft/computer/<id>/`
+- Keep the same folder structure as on disk
+
+4) Disk drive workflow (portable)
+- Copy files to a floppy disk, then use in-game `copy` or `cp` to move to the computer
+
 ## File Structure Convention
 
 - `/scripts/turtle/` - Turtle-specific programs

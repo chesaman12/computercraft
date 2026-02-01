@@ -1,2 +1,95 @@
-print ("Enter Password")
+--- Turtle Scripts Startup Menu
+-- Interactive menu to launch turtle scripts
+-- @script startup
+
+local function showMenu()
+    term.clear()
+    term.setCursorPos(1, 1)
+    
+    -- Show fuel level
+    turtle.refuel(0)  -- Trigger fuel check without consuming
+    local fuel = turtle.getFuelLevel()
+    if fuel == "unlimited" then
+        print("Fuel: Unlimited")
+    else
+        print("Fuel: " .. fuel)
+    end
+    print("")
+    
+    print("=== Turtle Scripts Menu ===")
+    print("")
+    print("-- Building --")
+    print("  1: Block Builder")
+    print("  2: Wall Builder")
+    print("  3: House Builder")
+    print("")
+    print("-- Mining --")
+    print("  4: Area Digger")
+    print("  5: Simple Miner")
+    print("  6: Stair Miner")
+    print("  7: Strip Miner")
+    print("")
+    print("-- Utility --")
+    print("  8: Move")
+    print("  9: Refuel")
+    print(" 10: Lava Refuel")
+    print("")
+    print("  r: Reboot")
+    print("  q: Exit to shell")
+    print("")
+    write("--> ")
+end
+
+local function runScript(scriptPath)
+    if fs.exists(scriptPath) then
+        term.clear()
+        term.setCursorPos(1, 1)
+        shell.run(scriptPath)
+    else
+        printError("Script not found: " .. scriptPath)
+        printError("Run 'installer' to download scripts")
+        print("")
+        print("Press any key to continue...")
+        os.pullEvent("key")
+    end
+end
+
+local scripts = {
+    ["1"] = "building/block.lua",
+    ["2"] = "building/wall.lua",
+    ["3"] = "building/house.lua",
+    ["4"] = "mining/dig.lua",
+    ["5"] = "mining/simple_miner.lua",
+    ["6"] = "mining/stair_miner.lua",
+    ["7"] = "mining/strip_miner.lua",
+    ["8"] = "utility/move.lua",
+    ["9"] = "utility/refuel.lua",
+    ["10"] = "utility/lava_refuel.lua",
+}
+
+local function main()
+    while true do
+        showMenu()
+        local choice = read():lower()
+        
+        if choice == "r" or choice == "reboot" then
+            os.reboot()
+        elseif choice == "q" or choice == "quit" or choice == "exit" then
+            term.clear()
+            term.setCursorPos(1, 1)
+            print("Type 'startup' to return to menu")
+            return
+        elseif scripts[choice] then
+            runScript(scripts[choice])
+            print("")
+            print("Press any key to return to menu...")
+            os.pullEvent("key")
+        elseif choice ~= "" then
+            print("Unknown option: " .. choice)
+            sleep(1)
+        end
+    end
+end
+
+main()
 
