@@ -26,12 +26,28 @@ Every successful `turtle.forward()` increments the corresponding axis.
 
 ## High-level algorithm
 
-1. Read parameters (`corridorLength`, `corridorCount`, `gap`, `returnHome`, `fullMode`).
-2. Estimate required fuel and call `fuel.ensureFuel(...)`.
-3. **Phase 1**: Mine the perimeter rectangle (bottom bar → right corridor → top bar → left corridor).
-4. **Phase 2**: Fill in interior corridors by branching off the bars.
-5. Optionally return to start.
-6. Print statistics (time, moves, turns, fuel used).
+1. Read parameters (`corridorLength`, `corridorCount`, `gap`, `mineRight`, `returnHome`, `fullMode`).
+2. Show efficiency tips based on corridor count (odd vs even, repositioning moves).
+3. Estimate required fuel and call `fuel.ensureFuel(...)`.
+4. **Phase 1**: Mine the perimeter rectangle (bottom bar → far corridor → top bar → near corridor).
+5. **Phase 2**: Fill in interior corridors by branching off the bars.
+6. Optionally return to start.
+7. Print statistics (time, moves, turns, fuel used).
+
+## Direction option
+
+The `mineRight` parameter controls which way the grid expands:
+- `true` (default): Mine to the **right** (+X direction)
+- `false`: Mine to the **left** (-X direction)
+
+This allows you to position the turtle on either side of an existing mine.
+
+## Efficiency guidance
+
+When you enter the number of corridors, the script shows:
+- **Odd corridor counts (3, 5, 7...)**: You end at a middle interior corridor, so return home is shorter on average.
+- **Even corridor counts (4, 6, 8...)**: You end at the farther edge, so return home is longer.
+- **Repositioning moves**: The script calculates how many moves will be spent walking back through already-mined corridors between interior corridor digs.
 
 ## Symmetric grid pattern
 

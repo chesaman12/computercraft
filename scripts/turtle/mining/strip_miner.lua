@@ -375,39 +375,44 @@ end
 
 --- Symmetric grid: perimeter rectangle + interior corridors
 -- Creates a clean rectangular shape with all corridors connected at both ends
-local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode)
+-- @param mineRight boolean: true = mine to the right (+X), false = mine to the left (-X)
+local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, mineRight)
     local shift = gap + 1
     local maxX = (corridorCount - 1) * shift
     
-    logger.debug("Mining symmetric grid: length=%d, corridors=%d, maxX=%d", corridorLength, corridorCount, maxX)
+    -- Direction constants based on mineRight
+    local sideDir = mineRight and 1 or 3    -- +X or -X
+    local backDir = mineRight and 3 or 1    -- -X or +X
+    
+    logger.debug("Mining symmetric grid: length=%d, corridors=%d, maxX=%d, right=%s", corridorLength, corridorCount, maxX, tostring(mineRight))
     
     -- Phase 1: Mine the perimeter rectangle
-    -- Bottom bar: mine from x=0 to x=maxX at z=0
+    -- Bottom bar: mine from x=0 to x=maxX (or -maxX) at z=0
     logger.debug("Phase 1a: Mining bottom bar at z=0")
-    turnTo(1) -- face +X
+    turnTo(sideDir)
     for i = 1, maxX do
         if not mineForward(fullMode) then return false end
     end
-    -- Now at (maxX, 0)
+    -- Now at (maxX, 0) or (-maxX, 0)
     
-    -- Right corridor: mine from z=0 to z=corridorLength at x=maxX
-    logger.debug("Phase 1b: Mining right corridor at x=%d", maxX)
+    -- Far corridor: mine from z=0 to z=corridorLength at x=maxX (or -maxX)
+    logger.debug("Phase 1b: Mining far corridor")
     turnTo(0) -- face +Z
     for i = 1, corridorLength do
         if not mineForward(fullMode) then return false end
     end
-    -- Now at (maxX, corridorLength)
+    -- Now at (maxX, corridorLength) or (-maxX, corridorLength)
     
-    -- Top bar: mine from x=maxX to x=0 at z=corridorLength
+    -- Top bar: mine back to x=0 at z=corridorLength
     logger.debug("Phase 1c: Mining top bar at z=%d", corridorLength)
-    turnTo(3) -- face -X
+    turnTo(backDir)
     for i = 1, maxX do
         if not mineForward(fullMode) then return false end
     end
     -- Now at (0, corridorLength)
     
-    -- Left corridor: mine from z=corridorLength to z=0 at x=0
-    logger.debug("Phase 1d: Mining left corridor at x=0")
+    -- Near corridor: mine from z=corridorLength to z=0 at x=0
+    logger.debug("Phase 1d: Mining near corridor at x=0")
     turnTo(2) -- face -Z
     for i = 1, corridorLength do
         if not mineForward(fullMode) then return false end
@@ -418,21 +423,19 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode)
     if corridorCount > 2 then
         logger.debug("Phase 2: Mining %d interior corridors", corridorCount - 2)
         for corridor = 2, corridorCount - 1 do
-            local corridorX = (corridor - 1) * shift
             -- Navigate to corridor start via bottom bar (already mined)
-            turnTo(1) -- face +X
+            turnTo(sideDir)
             for i = 1, shift do
                 if not moveForwardSafe() then return false end
             end
-            -- Now at (corridorX, 0)
             
             -- Mine this corridor upward
-            logger.debug("Mining interior corridor %d at x=%d", corridor, corridorX)
+            logger.debug("Mining interior corridor %d", corridor)
             turnTo(0) -- face +Z
             for i = 1, corridorLength do
                 if not mineForward(fullMode) then return false end
             end
-            -- Now at (corridorX, corridorLength)
+            -- Now at top of this corridor
             
             -- Walk back down via the corridor we just mined (if more corridors to do)
             if corridor < corridorCount - 1 then
@@ -440,7 +443,6 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode)
                 for i = 1, corridorLength do
                     if not moveForwardSafe() then return false end
                 end
-                -- Back at (corridorX, 0)
             end
         end
     end
@@ -449,11 +451,27 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode)
 end
 
 local function main()
-    print("Strip Miner (parallel corridors)")
+    print("Strip Miner (symmetric grid)")
     
     local corridorLength = input.readNumber("Corridor length: ")
     local corridorCount = input.readNumber("Number of corridors: ")
+    
+    -- Efficiency tip based on corridor count
+    if corridorCount >= 2 then
+        local interiorCount = corridorCount - 2
+        local walkBackMoves = math.max(0, interiorCount - 1) * corridorLength
+        if corridorCount % 2 == 1 then
+            print("  (Odd count = shorter return home)")
+        else
+            print("  (Even count = ends farther from start)")
+        end
+        if walkBackMoves > 0 then
+            print(string.format("  (~%d repositioning moves)", walkBackMoves))
+        end
+    end
+    
     local gap = input.readNumber("Rock gap between corridors (default 3): ", 3)
+    local mineRight = input.readYesNo("Mine to the right? (y/n, default y): ", true)
     local returnHome = input.readYesNo("Return to start when done? (y/n, default y): ", true)
     local fullMode = input.readChoice(
         "On full inventory: 1) pause, 2) chest + resume, 3) drop junk only: ",
@@ -464,6 +482,7 @@ local function main()
         corridorLength = corridorLength,
         corridorCount = corridorCount,
         gap = gap,
+        mineRight = mineRight,
         returnHome = returnHome,
         fullMode = fullMode,
     })
@@ -489,11 +508,11 @@ local function main()
         return
     end
 
-    logger.info("Starting strip mine: length=%d corridors=%d gap=%d", corridorLength, corridorCount, gap)
+    logger.info("Starting strip mine: length=%d corridors=%d gap=%d right=%s", corridorLength, corridorCount, gap, tostring(mineRight))
     print("Mining " .. totalSteps .. " blocks...")
 
     local aborted = false
-    if not mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode) then
+    if not mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, mineRight) then
         aborted = true
     end
 
