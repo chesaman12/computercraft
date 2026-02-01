@@ -230,10 +230,23 @@ local function idleForResource(resource)
         read()
         
         if resource == "fuel" then
-            -- Try to pick up fuel from chest
-            if isChestInFront() then
-                -- Look for fuel items in chest
+            -- First, try to consume any fuel already in inventory
+            for slot = 1, 15 do
+                if turtle.getItemCount(slot) > 0 then
+                    turtle.select(slot)
+                    if turtle.refuel(0) then
+                        turtle.refuel()  -- Consume the fuel
+                        print(string.format("Consumed fuel from slot %d", slot))
+                    end
+                end
+            end
+            
+            -- If still need fuel, try to pick up from chest
+            if fuel.getLevel() < CONFIG.minFuelToStart and isChestInFront() then
+                -- Pull items from chest, hold non-fuel temporarily, then return them
+                local nonFuelSlots = {}
                 local attempts = 0
+                
                 while fuel.getLevel() < CONFIG.minFuelToStart and attempts < 27 do
                     attempts = attempts + 1
                     
@@ -246,27 +259,46 @@ local function idleForResource(resource)
                         end
                     end
                     
-                    if not emptySlot then break end
+                    if not emptySlot then
+                        -- Inventory full, drop non-fuel items to make room
+                        for _, slot in ipairs(nonFuelSlots) do
+                            if turtle.getItemCount(slot) > 0 then
+                                turtle.select(slot)
+                                turtle.drop()
+                            end
+                        end
+                        nonFuelSlots = {}
+                        -- Try to find empty slot again
+                        for slot = 1, 15 do
+                            if turtle.getItemCount(slot) == 0 then
+                                emptySlot = slot
+                                break
+                            end
+                        end
+                        if not emptySlot then break end
+                    end
                     
                     turtle.select(emptySlot)
                     if turtle.suck(64) then
                         if turtle.refuel(0) then
+                            -- It's fuel! Consume it
                             turtle.refuel()
+                            print(string.format("Refueled! Now at %d", fuel.getLevel()))
                         else
-                            turtle.drop()
+                            -- Not fuel - hold onto it, don't put back yet
+                            table.insert(nonFuelSlots, emptySlot)
                         end
                     else
+                        -- Chest is empty
                         break
                     end
                 end
                 
-                -- Drop any non-fuel items back
-                for slot = 1, 15 do
+                -- Now put all non-fuel items back into chest
+                for _, slot in ipairs(nonFuelSlots) do
                     if turtle.getItemCount(slot) > 0 then
                         turtle.select(slot)
-                        if not turtle.refuel(0) then
-                            turtle.drop()
-                        end
+                        turtle.drop()
                     end
                 end
             end
@@ -275,7 +307,7 @@ local function idleForResource(resource)
                 print("Fuel replenished! Resuming...")
                 return true
             else
-                print(string.format("Still need %d fuel. Add more and press Enter.", 
+                print(string.format("Still need %d fuel. Add fuel to chest and press Enter.", 
                     CONFIG.minFuelToStart - fuel.getLevel()))
             end
             
@@ -363,10 +395,31 @@ local function depositAndRestock()
         end
     end
     
-    -- Try to pick up fuel from chest if needed
+    -- First, consume any fuel items we're carrying to top up the fuel buffer
+    if not fuel.isUnlimited() and fuel.getLevel() < CONFIG.minFuelToStart then
+        print("Consuming fuel from inventory...")
+        for slot = 1, 15 do
+            if turtle.getItemCount(slot) > 0 then
+                turtle.select(slot)
+                if turtle.refuel(0) then
+                    -- This is fuel, consume what we need
+                    local needed = CONFIG.minFuelToStart - fuel.getLevel()
+                    if needed > 0 then
+                        turtle.refuel()  -- Consume the whole stack
+                        print(string.format("Consumed fuel from slot %d, now at %d", slot, fuel.getLevel()))
+                    end
+                    if fuel.getLevel() >= CONFIG.minFuelToStart then
+                        break
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Try to pick up fuel from chest if STILL needed
     local needFuel = not fuel.isUnlimited() and fuel.getLevel() < CONFIG.minFuelToStart
     if needFuel then
-        print("Looking for fuel in chest...")
+        print("Still need fuel, looking in chest...")
         
         -- Strategy: Pull items from chest, keep fuel items, hold non-fuel temporarily
         -- Only put non-fuel back AFTER we've searched the whole chest
