@@ -17,7 +17,7 @@
 -- ============================================
 local GITHUB_USER = "chesaman12"
 local GITHUB_REPO = "computercraft"
-local GITHUB_BRANCH = "feature/installer-refactor"
+local GITHUB_BRANCH = "turtle-overhaul"
 local PROJECT_FOLDER = "turtle"
 
 -- Base URL for raw GitHub content
