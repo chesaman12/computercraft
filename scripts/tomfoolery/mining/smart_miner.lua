@@ -1,16 +1,25 @@
 --- Smart Mining Turtle Script
--- An optimized branch mining turtle that:
--- - Mines efficient branch tunnels exposing maximum ore faces
--- - Tracks position and can return home
--- - Manages inventory and discards junk
--- - Deposits valuables in a chest at start position
--- - Detects and mines ore veins
--- - Handles fuel management automatically
+-- An optimized branch mining turtle using vertical snake pattern for maximum ore exposure
+--
+-- Features:
+-- - Snake mining pattern: Moves in a vertical wave (floor->ceiling->floor) to expose
+--   all 6 block faces at multiple heights, catching more ore veins
+-- - Mines 1x3 tunnels (3 blocks high) with ore checks at floor and ceiling levels
+-- - Checks all 6 directions for valuable ores and follows veins recursively
+-- - Tracks position and can return home safely
+-- - Manages inventory, discards junk, deposits valuables in chest
+-- - Auto-refuels from inventory and chest
+-- - Places torches at regular intervals
+--
+-- Mining Pattern (side view):
+--   At each forward step, turtle moves: floor -> middle -> ceiling -> middle -> floor
+--   This creates a 1x3 tunnel and checks ores at floor level (checking down) and
+--   ceiling level (checking up), plus horizontal checks at both heights
 --
 -- Usage: smart_miner <length> [branches] [spacing]
 --   length:  How far each branch extends (default: 50)
 --   branches: Number of branches on each side (default: 5)
---   spacing: Blocks between branches (default: 3, optimal for ore exposure)
+--   spacing: Blocks between branches (default: 3, optimal for ore exposure per wiki)
 --
 -- IMPORTANT: Run from the root installation directory (where common/ is):
 --   mining/smart_miner 50
@@ -64,7 +73,18 @@ local CONFIG = {
     branchLength = 50,      -- Length of each branch
     branchCount = 5,        -- Branches per side
     branchSpacing = 3,      -- Blocks between branches (3 = optimal ore exposure)
-    tunnelHeight = 2,       -- Height of tunnel (2 blocks tall)
+    tunnelHeight = 3,       -- Height of tunnel (3 blocks tall for snake mining)
+    
+    -- Snake mining pattern settings
+    -- The turtle moves in a vertical snake pattern:
+    --   1. At floor: check below and sides
+    --   2. Move up, check ceiling and sides
+    --   3. Move forward
+    --   4. Check ceiling and sides
+    --   5. Move down, check floor and sides
+    --   6. Move forward, repeat
+    -- This exposes 4 block faces vertically and all 4 horizontal faces at 2 heights
+    useSnakeMining = true,  -- Use vertical snake pattern for maximum ore exposure
     
     -- Behavior settings
     placeFloors = false,    -- Place cobblestone floors over gaps
@@ -163,7 +183,9 @@ end
 local function fuelNeededToReturnHome()
     local pos = movement.getPosition()
     local distanceHome = math.abs(pos.x) + math.abs(pos.y) + math.abs(pos.z)
-    return distanceHome + CONFIG.fuelReserve
+    -- Add extra reserve for snake mining (we move up/down frequently)
+    local snakeMultiplier = CONFIG.useSnakeMining and 1.5 or 1
+    return math.ceil((distanceHome + CONFIG.fuelReserve) * snakeMultiplier)
 end
 
 --- Check if we have enough fuel to continue safely
@@ -498,42 +520,64 @@ local function digDownBlock()
 end
 
 --- Check for ores in all directions and mine veins
+-- Checks all 6 directions (front, back, left, right, up, down)
+-- and recursively mines any ore veins found
 local function checkForOres()
     if not CONFIG.checkOreVeins then return 0 end
     
     local oresFound = 0
     
-    -- Check all 6 directions
-    local function checkDirection(inspectFunc, digFunc, moveFunc, returnFunc)
-        local block = inspectFunc()
-        if miningUtils.isOre(block) then
-            digFunc()
-            oresFound = oresFound + 1
-            stats.oresMined = stats.oresMined + 1
-        end
-    end
-    
-    -- Check front
+    -- Check front - use recursive vein mining
     local front = miningUtils.inspectForward()
     if miningUtils.isOre(front) then
         oresFound = oresFound + miningUtils.checkAndMineOres(movement)
-        stats.oresMined = stats.oresMined + oresFound
+        stats.oresMined = stats.oresMined + 1
     end
+    
+    -- Check back (behind us)
+    movement.turnAround()
+    local back = miningUtils.inspectForward()
+    if miningUtils.isOre(back) then
+        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
+        stats.oresMined = stats.oresMined + 1
+    end
+    movement.turnAround()  -- Face forward again
+    
+    -- Check left
+    movement.turnLeft()
+    local left = miningUtils.inspectForward()
+    if miningUtils.isOre(left) then
+        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
+        stats.oresMined = stats.oresMined + 1
+    end
+    
+    -- Check right (turn 180 from left)
+    movement.turnAround()
+    local right = miningUtils.inspectForward()
+    if miningUtils.isOre(right) then
+        oresFound = oresFound + miningUtils.checkAndMineOres(movement)
+        stats.oresMined = stats.oresMined + 1
+    end
+    movement.turnLeft()  -- Face forward again
     
     -- Check up
     local up = miningUtils.inspectUp()
     if miningUtils.isOre(up) then
-        oresFound = oresFound + 1
-        stats.oresMined = stats.oresMined + 1
         miningUtils.digUp()
+        movement.up(false)
+        oresFound = oresFound + 1 + miningUtils.checkAndMineOres(movement)
+        movement.down(false)
+        stats.oresMined = stats.oresMined + 1
     end
     
     -- Check down  
     local down = miningUtils.inspectDown()
     if miningUtils.isOre(down) then
-        oresFound = oresFound + 1
-        stats.oresMined = stats.oresMined + 1
         miningUtils.digDown()
+        movement.down(false)
+        oresFound = oresFound + 1 + miningUtils.checkAndMineOres(movement)
+        movement.up(false)
+        stats.oresMined = stats.oresMined + 1
     end
     
     return oresFound
@@ -548,8 +592,102 @@ local function hasTorchAbove()
     return false
 end
 
---- Mine a 2-tall tunnel forward
-local function mineTunnelStep(checkOres, placeTorch)
+--- Check if there's already a torch at a position (checks above from floor level)
+local function hasTorchAtCurrentColumn()
+    -- From floor level, check if there's a torch anywhere in this column
+    local success, block = turtle.inspectUp()
+    if success and block.name:match("torch") then
+        return true
+    end
+    return false
+end
+
+--- Mine using the vertical snake pattern (1x3 tunnel with maximum ore exposure)
+-- Pattern: At each forward step, turtle moves up/down in a snake to check all faces
+--   Floor level (y=0):  check below + horizontal
+--   Middle level (y=1): check horizontal (this is where forward movement happens)
+--   Upper level (y=2):  check above + horizontal
+--
+-- Movement per step:
+--   1. From floor: check ores at floor level (down, sides)
+--   2. Dig up, move up to middle
+--   3. Dig forward, move forward (advancing the tunnel)
+--   4. Dig up again, move up to ceiling level
+--   5. Check ores at ceiling level (up, sides)
+--   6. Dig down (clear middle), move down to middle
+--   7. Dig down (clear floor), move down to floor
+--   8. Check ores at floor level
+--   9. Place torch at floor level if needed
+--   10. Repeat
+--
+-- This creates a 1x3 tunnel and checks all 6 directions at 2 different heights
+local function mineSnakeStep(checkOres, placeTorch)
+    -- === PHASE 1: Check ores at current floor position (before moving) ===
+    if checkOres then
+        checkForOres()
+    end
+    
+    -- === PHASE 2: Move up to mining level and advance forward ===
+    -- We mine from the middle height (y+1) so we can clear above and below
+    miningUtils.digUp()
+    stats.blocksMined = stats.blocksMined + 1
+    movement.up(false)
+    
+    -- Dig forward and move into new column
+    if turtle.detect() then
+        miningUtils.digForward()
+        stats.blocksMined = stats.blocksMined + 1
+    end
+    movement.forward(true)
+    
+    -- === PHASE 3: Clear and check ceiling level ===
+    -- Dig up to ceiling, move up
+    miningUtils.digUp()
+    stats.blocksMined = stats.blocksMined + 1
+    movement.up(false)
+    
+    -- Check ores at ceiling level (especially above us)
+    if checkOres then
+        checkForOres()
+    end
+    
+    -- === PHASE 4: Clear middle and floor, move back down ===
+    -- Move down to middle level
+    movement.down(false)
+    
+    -- Dig down to clear floor level
+    miningUtils.digDown()
+    stats.blocksMined = stats.blocksMined + 1
+    
+    -- Move down to floor level
+    movement.down(false)
+    
+    -- === PHASE 5: Check ores at floor level and place torch ===
+    if checkOres then
+        checkForOres()
+    end
+    
+    -- Place torch at floor level (will be on the floor or wall)
+    local existingTorch = hasTorchAtCurrentColumn()
+    if placeTorch and getTorchCount() > 0 and not existingTorch then
+        turtle.select(CONFIG.torchSlot)
+        -- Place torch on the floor behind us for best lighting
+        movement.turnAround()
+        if not turtle.place() then
+            -- If can't place behind, try below (on the ground)
+            turtle.placeDown()
+        end
+        movement.turnAround()
+    end
+    
+    -- Periodic cleanup
+    if inventory.emptySlots() < 4 then
+        inventory.dropJunk()
+    end
+end
+
+--- Mine a simple 2-tall tunnel step (legacy mode)
+local function mineSimpleTunnelStep(checkOres, placeTorch)
     -- Dig forward and move into the space
     digForwardAndMove()
     
@@ -582,6 +720,15 @@ local function mineTunnelStep(checkOres, placeTorch)
     -- Periodic cleanup
     if inventory.emptySlots() < 4 then
         inventory.dropJunk()
+    end
+end
+
+--- Mine a tunnel step using configured method
+local function mineTunnelStep(checkOres, placeTorch)
+    if CONFIG.useSnakeMining then
+        mineSnakeStep(checkOres, placeTorch)
+    else
+        mineSimpleTunnelStep(checkOres, placeTorch)
     end
 end
 
@@ -673,6 +820,7 @@ local function branchMine()
         -- Mine right branch
         branchNum = branchNum + 1
         print(string.format("Mining branch %d (right)...", branchNum))
+        local branchStartPos = movement.getPosition()  -- Remember Y level before branch
         movement.turnRight()
         mineBranch(CONFIG.branchLength)
         
@@ -684,6 +832,16 @@ local function branchMine()
         print("Returning to main tunnel...")
         for step = 1, CONFIG.branchLength do
             movement.forward(true)
+        end
+        -- Ensure we're at the correct Y level (snake mining should end at floor level)
+        local currentPos = movement.getPosition()
+        while currentPos.y > branchStartPos.y do
+            movement.down(false)
+            currentPos = movement.getPosition()
+        end
+        while currentPos.y < branchStartPos.y do
+            movement.up(false)
+            currentPos = movement.getPosition()
         end
         
         -- Mine left branch
@@ -698,6 +856,16 @@ local function branchMine()
         print("Returning to main tunnel...")
         for step = 1, CONFIG.branchLength do
             movement.forward(true)
+        end
+        -- Ensure we're at the correct Y level
+        currentPos = movement.getPosition()
+        while currentPos.y > branchStartPos.y do
+            movement.down(false)
+            currentPos = movement.getPosition()
+        end
+        while currentPos.y < branchStartPos.y do
+            movement.up(false)
+            currentPos = movement.getPosition()
         end
         movement.turnRight()  -- Face forward again
     end
@@ -720,12 +888,18 @@ local function main()
     print(string.format("Branch length: %d", CONFIG.branchLength))
     print(string.format("Branches per side: %d", CONFIG.branchCount))
     print(string.format("Branch spacing: %d", CONFIG.branchSpacing))
+    if CONFIG.useSnakeMining then
+        print("Mining mode: SNAKE (1x3 tunnel, max ore exposure)")
+    else
+        print("Mining mode: SIMPLE (1x2 tunnel)")
+    end
     print("")
     
-    -- Check fuel
+    -- Check fuel (snake mining uses more fuel due to vertical movement)
     if not fuel.isUnlimited() then
-        local totalDistance = CONFIG.branchLength * CONFIG.branchCount * 4 + 
-                              CONFIG.branchCount * CONFIG.branchSpacing * 2
+        local fuelMultiplier = CONFIG.useSnakeMining and 3 or 1  -- Snake uses ~3x fuel per step
+        local totalDistance = (CONFIG.branchLength * CONFIG.branchCount * 4 + 
+                              CONFIG.branchCount * CONFIG.branchSpacing * 2) * fuelMultiplier
         print(string.format("Estimated fuel needed: %d", totalDistance))
         print(string.format("Current fuel: %d", fuel.getLevel()))
         
