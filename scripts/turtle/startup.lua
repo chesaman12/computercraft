@@ -51,9 +51,10 @@ local function showMenu()
     
     -- Navigation
     print("")
-    print("</>: Prev/Next page")
+    print("n: Next page  p: Prev page")
+    print("(also: > . for next, < , for prev)")
     print("r: Reboot  q: Exit")
-    write("--> ")
+    write("Select option or page key --> ")
 end
 
 local function runScript(scriptPath)
