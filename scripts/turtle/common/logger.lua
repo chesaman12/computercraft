@@ -203,4 +203,19 @@ function M.clear()
     end
 end
 
+--- Log script startup with parameters
+-- @param scriptName Name of the script
+-- @param params Table of parameter name/value pairs
+function M.logParams(scriptName, params)
+    local parts = { scriptName .. " started" }
+    if params and next(params) then
+        local paramStrs = {}
+        for name, value in pairs(params) do
+            table.insert(paramStrs, name .. "=" .. tostring(value))
+        end
+        table.insert(parts, "with: " .. table.concat(paramStrs, ", "))
+    end
+    log("info", table.concat(parts, " "))
+end
+
 return M

@@ -12,6 +12,7 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 
 local fuel = require("common.fuel")
 local input = require("common.input")
+local logger = require("common.logger")
 
 print("House Builder by Kolacats")
 print("Place blocks (1-14), fuel (15), door (16)")
@@ -25,6 +26,8 @@ end
 
 local lw = input.readNumber("Length and width: ")
 local h = input.readNumber("Height: ")
+
+logger.logParams("house", { lengthWidth = lw, height = h })
 
 local oe = lw
 lw = lw - 1

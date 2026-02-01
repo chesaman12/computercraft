@@ -11,6 +11,7 @@ package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
 local input = require("common.input")
 local movement = require("common.movement")
 local fuel = require("common.fuel")
+local logger = require("common.logger")
 
 -- Get parameters from user
 write("Dig up or down (u, d): ")
@@ -20,6 +21,8 @@ local turn = input.normalizeLeftRight(read())
 local length = input.readNumber("Length: ")
 local width = input.readNumber("Width: ")
 local depth = input.readNumber("Depth/Height: ")
+
+logger.logParams("dig", { direction = direction, turn = turn, length = length, width = width, depth = depth })
 
 local function digUpOrDown()
     fuel.verifyFuelLevel()

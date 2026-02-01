@@ -2,41 +2,57 @@
 -- Interactive menu to launch turtle scripts
 -- @script startup
 
+-- Menu pages for pagination (turtle terminal is 13 lines)
+local pages = {
+    {
+        title = "Building",
+        items = {
+            { key = "1", name = "Block Builder",  script = "building/block.lua" },
+            { key = "2", name = "Wall Builder",   script = "building/wall.lua" },
+            { key = "3", name = "House Builder",  script = "building/house.lua" },
+        }
+    },
+    {
+        title = "Mining",
+        items = {
+            { key = "4", name = "Area Digger",    script = "mining/dig.lua" },
+            { key = "5", name = "Simple Miner",   script = "mining/simple_miner.lua" },
+            { key = "6", name = "Stair Miner",    script = "mining/stair_miner.lua" },
+            { key = "7", name = "Strip Miner",    script = "mining/strip_miner.lua" },
+        }
+    },
+    {
+        title = "Utility",
+        items = {
+            { key = "8", name = "Move",           script = "utility/move.lua" },
+            { key = "9", name = "Refuel",         script = "utility/refuel.lua" },
+            { key = "0", name = "Lava Refuel",    script = "utility/lava_refuel.lua" },
+        }
+    },
+}
+
+local currentPage = 1
+
 local function showMenu()
     term.clear()
     term.setCursorPos(1, 1)
     
-    -- Show fuel level
-    turtle.refuel(0)  -- Trigger fuel check without consuming
+    -- Fuel status (compact)
     local fuel = turtle.getFuelLevel()
-    if fuel == "unlimited" then
-        print("Fuel: Unlimited")
-    else
-        print("Fuel: " .. fuel)
-    end
-    print("")
+    local fuelStr = (fuel == "unlimited") and "Unlim" or tostring(fuel)
+    print("Fuel:" .. fuelStr .. " [" .. currentPage .. "/" .. #pages .. "]")
     
-    print("=== Turtle Scripts Menu ===")
+    -- Current page
+    local page = pages[currentPage]
+    print("== " .. page.title .. " ==")
+    for _, item in ipairs(page.items) do
+        print(" " .. item.key .. ": " .. item.name)
+    end
+    
+    -- Navigation
     print("")
-    print("-- Building --")
-    print("  1: Block Builder")
-    print("  2: Wall Builder")
-    print("  3: House Builder")
-    print("")
-    print("-- Mining --")
-    print("  4: Area Digger")
-    print("  5: Simple Miner")
-    print("  6: Stair Miner")
-    print("  7: Strip Miner")
-    print("")
-    print("-- Utility --")
-    print("  8: Move")
-    print("  9: Refuel")
-    print(" 10: Lava Refuel")
-    print("")
-    print("  r: Reboot")
-    print("  q: Exit to shell")
-    print("")
+    print("</>: Prev/Next page")
+    print("r: Reboot  q: Exit")
     write("--> ")
 end
 
@@ -49,23 +65,18 @@ local function runScript(scriptPath)
         printError("Script not found: " .. scriptPath)
         printError("Run 'installer' to download scripts")
         print("")
-        print("Press any key to continue...")
+        print("Press any key...")
         os.pullEvent("key")
     end
 end
 
-local scripts = {
-    ["1"] = "building/block.lua",
-    ["2"] = "building/wall.lua",
-    ["3"] = "building/house.lua",
-    ["4"] = "mining/dig.lua",
-    ["5"] = "mining/simple_miner.lua",
-    ["6"] = "mining/stair_miner.lua",
-    ["7"] = "mining/strip_miner.lua",
-    ["8"] = "utility/move.lua",
-    ["9"] = "utility/refuel.lua",
-    ["10"] = "utility/lava_refuel.lua",
-}
+-- Build lookup table from pages
+local scripts = {}
+for _, page in ipairs(pages) do
+    for _, item in ipairs(page.items) do
+        scripts[item.key] = item.script
+    end
+end
 
 local function main()
     while true do
@@ -79,13 +90,17 @@ local function main()
             term.setCursorPos(1, 1)
             print("Type 'startup' to return to menu")
             return
+        elseif choice == ">" or choice == "." or choice == "n" then
+            currentPage = currentPage % #pages + 1
+        elseif choice == "<" or choice == "," or choice == "p" then
+            currentPage = (currentPage - 2) % #pages + 1
         elseif scripts[choice] then
             runScript(scripts[choice])
             print("")
-            print("Press any key to return to menu...")
+            print("Press any key...")
             os.pullEvent("key")
         elseif choice ~= "" then
-            print("Unknown option: " .. choice)
+            print("Unknown: " .. choice)
             sleep(1)
         end
     end

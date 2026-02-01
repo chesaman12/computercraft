@@ -316,6 +316,15 @@ local function main()
         1, 3, 1
     )
 
+    logger.logParams("strip_miner", {
+        spineLength = spineLength,
+        branchLength = branchLength,
+        spacing = spacing,
+        bothSides = bothSides,
+        returnHome = returnHome,
+        fullMode = fullMode,
+    })
+
     local branchCount = math.floor((spineLength - 1) / spacing)
     local movesPerBranch = bothSides and (branchLength * 4) or (branchLength * 2)
     local estimatedMoves = spineLength + (returnHome and spineLength or 0) + (branchCount * movesPerBranch)
