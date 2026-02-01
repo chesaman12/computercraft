@@ -1113,8 +1113,9 @@ local function mineInternalBranches()
     movement.turnRight()
     
     -- Now we're at the starting position for branch 1, facing east
-    -- Track which side we're on: true = at west side (go east), false = at east side (go west)
-    local atWestSide = true
+    -- Track which direction we just mined (and thus which way we're facing)
+    -- true = just mined east (facing east), false = just mined west (facing west)
+    local facingEast = true  -- We start facing east for branch 1
     
     for branchNum = 1, numBranches do
         -- Check safety
@@ -1131,18 +1132,21 @@ local function mineInternalBranches()
         
         -- For branches after the first, move north to the next branch position
         if branchNum > 1 then
-            -- We just finished mining a branch and are at the opposite side
-            -- Turn to face north (depends on which side we're at)
-            if atWestSide then
-                -- We're at west side, facing east - turn left to face north
+            -- We just finished mining a branch
+            -- The direction we're facing depends on which way we just mined
+            
+            -- Turn to face north
+            if facingEast then
+                -- We just mined east, so we're facing east
+                -- Turn LEFT to face north
                 movement.turnLeft()
             else
-                -- We're at east side, facing west - turn right to face north
+                -- We just mined west, so we're facing west
+                -- Turn RIGHT to face north
                 movement.turnRight()
             end
             
             -- Mine north by spacing + 1 blocks to reach the next branch row
-            -- This is through UNMINED stone between branches
             print(string.format("Mining north to branch %d...", branchNum))
             for step = 1, CONFIG.branchSpacing + 1 do
                 if not hasSafeFuel() then returnHomeAndDeposit() end
@@ -1151,23 +1155,28 @@ local function mineInternalBranches()
                 movement.forward(true)
             end
             
-            -- Turn to face the mining direction for this branch
-            if atWestSide then
-                -- We were at west, now need to mine east
-                movement.turnRight()  -- Face east
+            -- Now turn to face the direction we need to mine this branch
+            -- We alternate: if we just mined east, now mine west (and vice versa)
+            if facingEast then
+                -- We were facing east, now facing north after turn
+                -- Need to mine WEST this time, so turn LEFT
+                movement.turnLeft()
+                facingEast = false  -- We're about to mine west
             else
-                -- We were at east, now need to mine west  
-                movement.turnLeft()   -- Face west
+                -- We were facing west, now facing north after turn
+                -- Need to mine EAST this time, so turn RIGHT
+                movement.turnRight()
+                facingEast = true   -- We're about to mine east
             end
         end
         
         -- Mine this branch
-        local direction = atWestSide and "east" or "west"
+        local direction = facingEast and "east" or "west"
         print(string.format("Mining branch %d/%d (%s)...", branchNum, numBranches, direction))
         mineBranch(branchLength)
         
-        -- After mining, we're now at the opposite side
-        atWestSide = not atWestSide
+        -- Note: facingEast already reflects the direction we just mined
+        -- (it was set before mining, or it's the initial true for branch 1)
     end
     
     print("All internal branches complete!")
