@@ -54,6 +54,9 @@ local home = require("miner.home")
 local tunnel = require("miner.tunnel")
 local patterns = require("miner.patterns")
 
+-- Capture command line arguments at file scope
+local tArgs = { ... }
+
 -- Initialize modules
 core.init({
     movement = movement,
@@ -135,7 +138,7 @@ end
 
 local function main()
     -- Parse arguments
-    core.parseArgs({ ... })
+    core.parseArgs(tArgs)
     
     -- Validate and prepare
     validateStartup()
