@@ -23,6 +23,8 @@ local DEFAULT_TORCH_INTERVAL = 8
 local DEFAULT_FUEL_RESERVE = 200
 local DEFAULT_INV_THRESHOLD = 1
 local DEFAULT_POKEHOLE_INTERVAL = 4
+local SINGLE_CHEST_CAPACITY = 27
+local RESTOCK_FUEL_BUFFER = 10
 
 -- Default junk list
 local defaultJunkList = table.concat({
@@ -306,6 +308,7 @@ local function moveForwardSafe()
     return true
 end
 
+-- Navigate to x, y, z (Y handled first).
 local function goTo(x, y, z, targetDir)
     logger.debug("goTo: from x=%d y=%d z=%d to x=%d y=%d z=%d", posX, posY, posZ, x, y, z)
     if posY < y then
@@ -406,7 +409,7 @@ local function refuelFromChest(minFuel)
         return true
     end
     local attempts = 0
-    while turtle.getFuelLevel() < minFuel and attempts < 27 do -- 27 slots in a single chest
+    while turtle.getFuelLevel() < minFuel and attempts < SINGLE_CHEST_CAPACITY do -- Single chest capacity.
         attempts = attempts + 1
         local emptySlot = nil
         for slot = 1, 16 do
@@ -464,7 +467,7 @@ local function returnToChestAndBack()
     local homeDistance = distanceHome()
 
     logger.debug("Returning to chest from x=%d y=%d z=%d (distance=%d)", posX, posY, posZ, homeDistance)
-    if not fuel.ensureFuel(homeDistance * 2 + 10) then
+    if not fuel.ensureFuel(homeDistance * 2 + RESTOCK_FUEL_BUFFER) then
         return false
     end
 
@@ -472,7 +475,7 @@ local function returnToChestAndBack()
     dumpToChestBehindStart()
     logger.debug("Dumped inventory, restocking")
 
-    local minFuel = fuelReserve + math.abs(targetX) + math.abs(targetY) + math.abs(targetZ) + 10
+    local minFuel = fuelReserve + math.abs(targetX) + math.abs(targetY) + math.abs(targetZ) + RESTOCK_FUEL_BUFFER
     tryRefuel(minFuel)
     refuelFromChest(minFuel)
     if turtle.getFuelLevel() ~= "unlimited" and turtle.getFuelLevel() < minFuel then
@@ -551,7 +554,7 @@ local function checkFuelPeriodic()
 end
 
 local function isOre(name)
-    return oreList[name] == true
+    return oreList[name]
 end
 
 -- Return (dx, dz) delta for the current facing direction.
@@ -568,6 +571,7 @@ local function getForwardDelta()
     return 0, 0
 end
 
+-- Move forward without affecting mining progress (used for ore veins).
 local function moveForwardRaw()
     local attempts = 0
     while not turtle.forward() do
@@ -593,13 +597,28 @@ local function moveBackSafe()
     return ok
 end
 
+local function makeKey(x, y, z)
+    return x .. ":" .. y .. ":" .. z
+end
+
+local function checkForwardOre(visited, mineFn)
+    local dx, dz = getForwardDelta()
+    if not visited[makeKey(posX + dx, posY, posZ + dz)] then
+        local ok, data = turtle.inspect()
+        if ok and isOre(data.name) then
+            logger.debug("Ore forward: %s", data.name)
+            turtle.dig()
+            if moveForwardRaw() then
+                mineFn(visited)
+                moveBackSafe()
+            end
+        end
+    end
+end
+
 --- Recursively mine connected ore blocks.
 -- @param visited table Table of "x:y:z" keys to avoid revisiting nodes.
 local function mineVein(visited)
-    local function makeKey(x, y, z)
-        return x .. ":" .. y .. ":" .. z
-    end
-
     visited[makeKey(posX, posY, posZ)] = true
 
     -- Up
@@ -628,37 +647,22 @@ local function mineVein(visited)
         end
     end
 
-    local function checkForwardOre(visitedNodes)
-        local dx, dz = getForwardDelta()
-        if not visitedNodes[makeKey(posX + dx, posY, posZ + dz)] then
-            local ok, data = turtle.inspect()
-            if ok and isOre(data.name) then
-                logger.debug("Ore forward: %s", data.name)
-                turtle.dig()
-                if moveForwardRaw() then
-                    mineVein(visitedNodes)
-                    moveBackSafe()
-                end
-            end
-        end
-    end
-
     -- Forward
-    checkForwardOre(visited)
+    checkForwardOre(visited, mineVein)
 
     -- Left
     turnLeft()
-    checkForwardOre(visited)
+    checkForwardOre(visited, mineVein)
     turnRight()
 
     -- Right
     turnRight()
-    checkForwardOre(visited)
+    checkForwardOre(visited, mineVein)
     turnLeft()
 
     -- Back
     turnAround()
-    checkForwardOre(visited)
+    checkForwardOre(visited, mineVein)
     turnAround()
 end
 
@@ -685,12 +689,11 @@ local function maybePokeholes()
     if not enablePokeholes or pokeholeInterval <= 0 then
         return
     end
-    if currentStep == 0 or currentStep % pokeholeInterval ~= 0 then
-        return
+    if currentStep > 0 and currentStep % pokeholeInterval == 0 then
+        logger.debug("Pokeholes at step %d", currentStep)
+        pokeholeSide(turnLeft, turnRight)
+        pokeholeSide(turnRight, turnLeft)
     end
-    logger.debug("Pokeholes at step %d", currentStep)
-    pokeholeSide(turnLeft, turnRight)
-    pokeholeSide(turnRight, turnLeft)
 end
 
 local function placeTorchIfNeeded()
