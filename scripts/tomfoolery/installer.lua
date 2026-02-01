@@ -32,6 +32,7 @@ local files = {
     { path = "common/mining.lua",    required = true },
     { path = "common/fuel.lua",      required = true },
     { path = "common/config.lua",    required = true },
+    { path = "common/logger.lua",    required = true },
     { path = "common/turtle_actions.lua", required = false },
     
     -- Miner modules (smart_miner dependencies)
@@ -43,9 +44,13 @@ local files = {
     -- Configuration files
     { path = "config/ores.cfg",      required = true },
     { path = "config/junk.cfg",      required = true },
+    { path = "config/logger.cfg",    required = true },
     
     -- Mining scripts
     { path = "mining/smart_miner.lua", required = true },
+    
+    -- Utility scripts
+    { path = "upload_log.lua",       required = true },
 }
 
 -- Directories to create

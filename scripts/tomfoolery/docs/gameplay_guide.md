@@ -166,22 +166,23 @@ If you're using mods with custom ores:
 **IMPORTANT:** Always run scripts from the root installation directory (where `common/`, `mining/`, `config/` folders are). Do NOT `cd` into the `mining/` folder first.
 
 ```
-mining/smart_miner <length> [branches] [spacing]
+mining/smart_miner <size> [spacing] [--upload]
 ```
 
 **Parameters:**
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| length | 50 | How far each branch extends |
-| branches | 5 | Number of branches on each side of main tunnel |
+| size | 25 | Target square size for the mine |
 | spacing | 3 | Blocks between branches (3 is optimal for ore exposure) |
+| --upload | off | Upload log to Pastebin when complete |
 
 **Examples:**
 
 ```
-mining/smart_miner 50          -- 50-block branches, 5 per side, spacing 3
-mining/smart_miner 100 10      -- 100-block branches, 10 per side
-mining/smart_miner 30 8 2      -- 30-block branches, 8 per side, spacing 2
+mining/smart_miner 25              -- 25x25 square, spacing 3
+mining/smart_miner 50 --upload     -- 50x50 square, upload log when done
+mining/smart_miner 30 2            -- 30x30 square, spacing 2
+mining/smart_miner 40 3 --upload   -- 40x40 square, spacing 3, upload log
 ```
 
 ### Behavior
@@ -284,6 +285,76 @@ thermal:nickel_ore
 3. **Use coal blocks** for efficiency (800 fuel each)
 4. **Empty the chest** periodically if doing long mining sessions
 5. **Keep torches stocked** in slot 16 to prevent mob spawns
+6. **Use --upload flag** to get a log URL for debugging issues
+
+---
+
+## Logging and Log Uploads
+
+All scripts log their activity to local files and can upload logs to Pastebin for sharing and debugging.
+
+### Log Files
+
+Logs are saved to `/logs/<script_name>.log` automatically. You can view them with:
+
+```
+edit /logs/smart_miner.log
+```
+
+### Uploading Logs to Pastebin
+
+#### Method 1: Use --upload Flag
+
+Add `--upload` when running any script:
+
+```
+mining/smart_miner 25 --upload
+```
+
+The script will upload the log to Pastebin when it completes (or if it crashes) and display a URL.
+
+#### Method 2: Manual Upload
+
+Use the upload utility after running a script:
+
+```
+upload_log                    -- Upload most recent log
+upload_log smart_miner.log    -- Upload specific log
+upload_log --list             -- List available logs
+```
+
+### Sharing Logs for Help
+
+When you encounter issues:
+
+1. Run your script with `--upload` flag
+2. Copy the Pastebin URL displayed at the end
+3. Share the URL when asking for help
+
+The log includes:
+
+- Computer ID and label
+- All configuration parameters
+- Timestamps for every operation
+- Fuel levels and inventory states
+- Position tracking
+- Error messages with locations
+- Final statistics
+
+### Log Configuration
+
+Edit `config/logger.cfg` to customize logging:
+
+```
+# Log levels: error, warn, info, debug
+min_level = debug
+
+# Print to terminal while logging
+echo = true
+
+# Optional: Pastebin API key for more features
+# pastebin_key = YOUR_API_KEY
+```
 
 ---
 
@@ -313,13 +384,23 @@ thermal:nickel_ore
     - `common/inventory.lua`
     - `common/mining.lua`
     - `common/fuel.lua`
+    - `common/logger.lua`
 - Check for typos in the config file
+- **Run with --upload and share the log URL for help**
 
 ### Modded Ores Not Detected
 
 - Get the exact block ID using F3 debug screen
 - Add to `config/ores.cfg` with exact spelling
 - Block IDs are case-sensitive
+
+### Getting Debug Logs
+
+If something goes wrong:
+
+1. Re-run the script with `--upload` flag
+2. The log will be uploaded even on errors
+3. Share the Pastebin URL for detailed debugging
 
 ---
 
@@ -336,4 +417,4 @@ Future bots planned:
 
 ---
 
-_Last updated: January 2026_
+_Last updated: February 2026_

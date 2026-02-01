@@ -5,6 +5,7 @@
 local M = {}
 
 local core = nil
+local logger = require("common.logger")
 
 --- Initialize with core module reference
 -- @param coreModule table The miner.core module
@@ -15,6 +16,7 @@ end
 --- Wait for user to provide a resource (fuel or torches)
 -- @param resource string "fuel" or "torches"
 local function idleForResource(resource)
+    logger.warn("IDLE: Waiting for %s", resource)
     print("")
     print("========================================")
     print("  IDLE: Waiting for " .. resource)
@@ -43,8 +45,10 @@ local function idleForResource(resource)
             
             if core.fuel.getLevel() >= core.config.minFuelToStart then
                 print("Fuel replenished! Resuming...")
+                logger.info("Fuel replenished: %d", core.fuel.getLevel())
                 return true
             end
+            logger.debug("Still need %d fuel", core.config.minFuelToStart - core.fuel.getLevel())
             print(string.format("Still need %d fuel.", core.config.minFuelToStart - core.fuel.getLevel()))
             
         elseif resource == "torches" then
@@ -55,6 +59,7 @@ local function idleForResource(resource)
             
             if core.getTorchCount() > 0 then
                 print("Torches replenished! Resuming...")
+                logger.info("Torches replenished: %d", core.getTorchCount())
                 return true
             end
             print("No torches found. Add torches to the chest.")
@@ -176,6 +181,8 @@ function M.depositAndRestock()
     end
     
     core.stats.tripsHome = core.stats.tripsHome + 1
+    logger.info("Trip home #%d: deposited items, fuel=%d, torches=%d", 
+        core.stats.tripsHome, core.fuel.getLevel(), core.getTorchCount())
     
     -- Idle if still missing resources
     local fuelOk = core.fuel.isUnlimited() or core.fuel.getLevel() >= core.config.minFuelToStart
@@ -197,6 +204,8 @@ function M.returnHomeAndDeposit()
     local savedPos = { x = pos.x, y = pos.y, z = pos.z }
     local savedFacing = core.movement.getFacing()
     
+    logger.info("Returning home from x=%d, y=%d, z=%d (facing=%d)", 
+        savedPos.x, savedPos.y, savedPos.z, savedFacing)
     print("Returning home to deposit...")
     
     core.movement.goHome(true)

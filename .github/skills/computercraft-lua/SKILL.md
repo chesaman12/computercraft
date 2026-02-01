@@ -551,6 +551,8 @@ end
 
 ## Tomfoolery Project Structure
 
+**IMPORTANT:** All development work should be done in `scripts/tomfoolery/` ONLY. Do not use or modify files in `scripts/turtle/` or `scripts/computer/`.
+
 The `scripts/tomfoolery/` project uses a modular architecture:
 
 ```
@@ -560,7 +562,8 @@ tomfoolery/
 │   ├── inventory.lua # Item management, junk filtering
 │   ├── mining.lua    # Ore detection, safe digging
 │   ├── fuel.lua      # Fuel management, auto-refuel
-│   └── config.lua    # Config file loading
+│   ├── config.lua    # Config file loading
+│   └── logger.lua    # Logging with Pastebin upload
 ├── miner/            # Smart miner modules
 │   ├── core.lua      # Config, state, stats, utilities
 │   ├── home.lua      # Home navigation, deposits, restocking
@@ -570,9 +573,45 @@ tomfoolery/
 │   └── smart_miner.lua  # Thin orchestrator
 ├── config/           # Runtime configuration
 │   ├── ores.cfg      # Ore block list
-│   └── junk.cfg      # Junk block list
+│   ├── junk.cfg      # Junk block list
+│   └── logger.cfg    # Logging configuration
+├── upload_log.lua    # Upload logs to Pastebin
 └── installer.lua     # Downloads all files from GitHub
 ```
+
+### Logging Pattern (Required)
+
+All scripts should include comprehensive logging for debugging:
+
+```lua
+local logger = require("common.logger")
+
+-- At startup
+logger.clear()  -- Fresh log for this run
+logger.logParams("Script Name", {
+    param1 = value1,
+    param2 = value2,
+})
+
+-- Log sections for organization
+logger.section("Phase Name")
+
+-- Log at appropriate levels
+logger.info("Normal operation: %s", status)
+logger.warn("Warning: fuel low at %d", fuelLevel)
+logger.error("Error: %s", errorMessage)
+logger.debug("Position: x=%d, y=%d, z=%d", x, y, z)
+
+-- At end of run (uploads to Pastebin)
+logger.finalize(stats, "Run Title")
+```
+
+Log levels:
+
+- **error**: Fatal issues, exceptions, unrecoverable states
+- **warn**: Resource warnings, unexpected but recoverable conditions
+- **info**: Normal operations, phase changes, milestones
+- **debug**: Detailed flow, variable values, diagnostics
 
 ### Module Dependency Pattern
 

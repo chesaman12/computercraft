@@ -2,6 +2,22 @@
 
 This document defines AI agents that can help create and maintain ComputerCraft turtle and computer scripts. Use these agent definitions with agentic AI systems to generate high-quality Lua code.
 
+## ⚠️ CRITICAL: Workspace Scope
+
+**ALL development work should be done in the `scripts/tomfoolery/` directory ONLY.**
+
+- Do NOT use or modify files in `scripts/turtle/` or `scripts/computer/`
+- The `tomfoolery` directory is the active development workspace
+- Other directories contain legacy or experimental code
+
+When creating new files or modules:
+
+- Common libraries go in `tomfoolery/common/`
+- Miner modules go in `tomfoolery/miner/`
+- Mining scripts go in `tomfoolery/mining/`
+- Config files go in `tomfoolery/config/`
+- Documentation goes in `tomfoolery/docs/`
+
 ## Overview
 
 Each agent is specialized for a specific domain within ComputerCraft development. They share common knowledge about the CC:Tweaked environment but have focused expertise in their domain.
@@ -204,6 +220,53 @@ Patterns:
 
 ---
 
+### 6. Logging & Debugging Agent
+
+**Name:** `turtle-logging-agent`
+
+**Purpose:** Implement comprehensive logging with cloud upload support.
+
+**Expertise:**
+
+- Local file logging
+- Pastebin upload integration
+- Log level management
+- Debug information capture
+- Error tracking and reporting
+
+**Instructions:**
+
+```
+You are an expert in CC:Tweaked logging and debugging. When writing logging code:
+
+1. Always use common.logger module for consistent logging
+2. Log at appropriate levels: error, warn, info, debug
+3. Include contextual information (position, fuel, inventory state)
+4. Log before AND after critical operations
+5. Use logger.section() to organize log output
+6. Call logger.finalize() at end of runs to upload
+7. Handle upload failures gracefully
+
+Key patterns:
+- Startup: logger.logParams("ScriptName", {param1=val, param2=val})
+- Sections: logger.section("Phase Name")
+- Position: logger.debug("At x=%d, y=%d, z=%d", pos.x, pos.y, pos.z)
+- Stats: logger.logStats({blocksMined=n, oresMined=n})
+- Upload: local url = logger.uploadAndPrint("Run Title")
+
+Log levels guide:
+- error: Fatal issues, exceptions, unrecoverable states
+- warn: Non-fatal issues, resource warnings, unexpected conditions
+- info: Normal operations, phase transitions, milestones
+- debug: Detailed execution flow, variable values, diagnostics
+```
+
+**Example Prompt:**
+
+> Add comprehensive logging to a mining script that tracks position, fuel consumption, ore discovery, and uploads the log to Pastebin when complete or on error.
+
+---
+
 ## Composite Agents
 
 ### Smart Miner Agent
@@ -249,6 +312,7 @@ You are building a complete mining automation system. The architecture uses:
 - miner/home.lua: Home navigation, chest deposits, resource restocking
 - miner/tunnel.lua: Tunnel step functions, ore checking, digging helpers
 - miner/patterns.lua: High-level mining patterns (perimeter, branches)
+- common/logger.lua: Logging and Pastebin upload
 
 Requirements for mining scripts:
 1. Track position from start point (via common/movement.lua)
@@ -258,6 +322,9 @@ Requirements for mining scripts:
 5. Place torches for mob prevention (mandatory)
 6. Handle fuel depletion gracefully (idle at home if empty)
 7. Report statistics on completion
+8. **Log all significant events using common/logger.lua**
+9. **Support --upload flag for automatic log upload**
+10. **Log errors with position for debugging**
 ```
 
 ---
@@ -337,6 +404,31 @@ All agents should generate code compatible with:
 - **CC:Tweaked Lua 5.2** syntax
 - **Module pattern:** `local M = {} ... return M`
 
+### Required Logging Pattern
+
+**All scripts must include logging.** Use this pattern:
+
+```lua
+local logger = require("common.logger")
+
+-- At startup
+logger.clear()  -- Fresh log for this run
+logger.logParams("Script Name", {
+    param1 = value1,
+    param2 = value2,
+})
+
+-- During execution
+logger.section("Phase Name")
+logger.info("Normal operation: %s", status)
+logger.warn("Warning condition: %d", value)
+logger.error("Error occurred: %s", err)
+logger.debug("Debug info: x=%d, y=%d", x, y)
+
+-- At completion or error
+logger.finalize(stats, "Run Title")  -- Uploads to Pastebin
+```
+
 ### Module Path Requirements
 
 **CRITICAL:** CC:Tweaked's `require()` resolves paths relative to the running script's directory, NOT the current working directory. Scripts in subdirectories (like `mining/`) must set up the package path to find `common/` modules.
@@ -381,6 +473,7 @@ Edit `tomfoolery/installer.lua` and add new files to the `files` table:
 local files = {
     -- Common libraries
     { path = "common/newmodule.lua", required = true },
+    { path = "common/logger.lua", required = true },
 
     -- Miner modules (smart_miner dependencies)
     { path = "miner/core.lua", required = true },
@@ -390,6 +483,9 @@ local files = {
 
     -- Task scripts
     { path = "farming/crop_harvester.lua", required = true },
+
+    -- Utility scripts
+    { path = "upload_log.lua", required = true },
 }
 ```
 
@@ -410,10 +506,75 @@ local directories = {
 1. Create the script in the appropriate folder
 2. Add the file path to `installer.lua` files table
 3. Add any new directories to `installer.lua` directories table
-4. Update `agents.md` if adding new agent patterns
-5. Test the script locally (see `docs/testing.md`)
-6. Push changes to GitHub
-7. Test the installer downloads the new file
+4. **Include logging using `common/logger.lua`**
+5. **Support `--upload` flag for Pastebin upload**
+6. Update `agents.md` if adding new agent patterns
+7. Test the script locally (see `docs/testing.md`)
+8. Push changes to GitHub
+9. Test the installer downloads the new file
+
+## Log Sharing Workflow
+
+To get logs from in-game turtles for debugging:
+
+### Method 1: Automatic Upload (Recommended)
+
+Run scripts with the `--upload` flag:
+
+```
+mining/smart_miner 25 --upload
+```
+
+The script will upload the log to Pastebin on completion or error and display a URL.
+
+### Method 2: Manual Upload
+
+After running a script, use the upload utility:
+
+```
+upload_log                    -- Upload most recent log
+upload_log smart_miner.log    -- Upload specific log
+upload_log --list             -- List available logs
+```
+
+### Method 3: Read Log File
+
+View the log directly:
+
+```
+edit /logs/smart_miner.log
+```
+
+### Sharing Logs for Debugging
+
+1. Run your script (with `--upload` or without)
+2. Copy the Pastebin URL displayed
+3. Share the URL for analysis
+4. The log includes: computer ID, timestamps, all operations, errors, and final stats
+
+### Log Contents
+
+A typical log includes:
+
+```
+=== Smart Miner ===
+  targetSize = 25
+  adjustedSize = 26
+  numBranches = 5
+Computer ID: 42
+Fuel: 2000 / 20000
+--- Mining Started ---
+[D5 14:30:15] [INFO] Mining EAST side (26 blocks)
+[D5 14:30:45] [INFO] Safety: Inventory full (2 empty slots), returning home
+[D5 14:31:02] [INFO] Trip home #1: deposited items, fuel=1850, torches=48
+...
+--- Statistics ---
+  blocksMined: 1234
+  oresMined: 45
+  tripsHome: 3
+  elapsedSeconds: 450
+--- Run Complete ---
+```
 
 ## Skill Reference
 

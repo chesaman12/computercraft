@@ -7,6 +7,7 @@ local M = {}
 local core = nil
 local home = nil
 local tunnel = nil
+local logger = require("common.logger")
 
 --- Initialize with module references
 -- @param coreModule table The miner.core module
@@ -26,18 +27,21 @@ end
 -- @return boolean True if returned home
 local function safetyCheck()
     if not core.hasSafeFuel() then
+        logger.warn("Safety: Low fuel (%d), returning home", core.fuel.getLevel())
         print("WARNING: Fuel getting low, returning home...")
         home.returnHomeAndDeposit()
         return true
     end
     
     if core.inventory.emptySlots() <= core.config.inventoryThreshold then
+        logger.info("Safety: Inventory full (%d empty slots), returning home", core.inventory.emptySlots())
         print("Inventory full, returning home...")
         home.returnHomeAndDeposit()
         return true
     end
     
     if core.config.placeTorches and core.getTorchCount() == 0 then
+        logger.warn("Safety: Out of torches, returning home")
         print("Out of torches, returning home...")
         home.returnHomeAndDeposit()
         return true
@@ -110,30 +114,37 @@ end
 --- Mine the square perimeter (east -> north -> west -> south)
 -- @param size number The square size
 function M.minePerimeter(size)
+    logger.section("Perimeter Mining")
+    logger.info("Starting perimeter: %d x %d", size, size)
     print("=== Mining Square Perimeter ===")
     print(string.format("Square size: %d x %d", size, size))
     sleep(1)
     
     -- East side
+    logger.info("Mining EAST side (%d blocks)", size)
     print("Mining EAST side...")
     minePerimeterSide(size)
     core.movement.turnLeft()
     
     -- North side
+    logger.info("Mining NORTH side (%d blocks)", size)
     print("Mining NORTH side...")
     minePerimeterSide(size)
     core.movement.turnLeft()
     
     -- West side
+    logger.info("Mining WEST side (%d blocks)", size)
     print("Mining WEST side...")
     minePerimeterSide(size)
     core.movement.turnLeft()
     
     -- South side (back to origin)
+    logger.info("Mining SOUTH side (%d blocks)", size)
     print("Mining SOUTH side...")
     minePerimeterSide(size)
     core.movement.turnLeft()
     
+    logger.info("Perimeter complete: blocks=%d, ores=%d", core.stats.blocksMined, core.stats.oresMined)
     print("Perimeter complete!")
 end
 
@@ -145,6 +156,9 @@ end
 function M.mineInternalBranches()
     local adjustedSize = core.config.adjustedSquareSize
     local _, numBranches = core.calculateAdjustedSize(core.config.squareSize)
+    
+    logger.section("Internal Branches")
+    logger.info("Starting %d branches, adjustedSize=%d", numBranches, adjustedSize)
     
     -- branchSpacing is the north-south spacing between branches
     local branchSpacing = core.config.branchSpacing + 1
@@ -166,6 +180,7 @@ function M.mineInternalBranches()
     sleep(1)
     
     for branchNum = 1, numBranches do
+        logger.info("Starting branch %d of %d", branchNum, numBranches)
         print(string.format("\n====== BRANCH %d of %d ======", branchNum, numBranches))
         
         safetyCheck()
@@ -203,9 +218,11 @@ function M.mineInternalBranches()
         print(string.format("Mining BRANCH %d blocks EAST...", branchLength))
         M.mineBranch(branchLength)
         
+        logger.info("Branch %d complete: blocks=%d, ores=%d", branchNum, core.stats.blocksMined, core.stats.oresMined)
         print(string.format("Branch %d complete!", branchNum))
     end
     
+    logger.info("All %d branches complete", numBranches)
     print("\n=== All internal branches complete! ===")
 end
 
@@ -218,6 +235,8 @@ function M.squareMine()
     local adjustedSize, numBranches = core.calculateAdjustedSize(core.config.squareSize)
     core.config.adjustedSquareSize = adjustedSize
     
+    logger.section("Square Mine Pattern")
+    logger.info("Beginning square mine: size=%d, branches=%d", adjustedSize, numBranches)
     print(string.format("Square mining: %d x %d (%d branches)", adjustedSize, adjustedSize, numBranches))
     sleep(2)
     
