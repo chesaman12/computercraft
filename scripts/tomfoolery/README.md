@@ -13,12 +13,18 @@ tomfoolery/
 │   ├── fuel.lua        # Fuel management
 │   └── config.lua      # Configuration file loader
 │
+├── miner/            # Smart miner modules
+│   ├── core.lua        # Configuration, state, statistics
+│   ├── home.lua        # Home navigation, deposits, restocking
+│   ├── tunnel.lua      # Tunnel step functions, ore checking
+│   └── patterns.lua    # Mining patterns (perimeter, branches)
+│
 ├── config/           # Configuration files
 │   ├── ores.cfg        # Ore block IDs to detect and mine
 │   └── junk.cfg        # Junk block IDs to discard
 │
 ├── mining/           # Mining automation scripts
-│   ├── smart_miner.lua # Advanced branch mining with ore detection
+│   ├── smart_miner.lua # Advanced square perimeter mining with ore detection
 │   ├── basicActions.lua     # (Legacy) Basic digging actions
 │   ├── basicTurtleCommands.lua # (Legacy) Turtle command wrappers
 │   └── miningTunnel.lua     # (Legacy) Simple tunnel script
@@ -112,23 +118,32 @@ local needed = fuel.estimateReturnFuel(movement.getPosition())
 
 ### smart_miner.lua
 
-An advanced branch mining script that:
+An advanced square perimeter mining script that:
 
-- Creates efficient branch mine patterns (3-block spacing exposes all ores)
+- Mines a square perimeter, then fills with parallel branch tunnels
 - Tracks position and returns home when inventory is full
 - Deposits items in a chest at start position
 - Detects and follows ore veins
 - Manages fuel automatically
 - Discards junk blocks (cobblestone, dirt, gravel)
 
+**Architecture:**
+
+The smart miner uses a modular design:
+
+- `miner/core.lua` - Configuration, state, statistics
+- `miner/home.lua` - Home navigation, deposits, restocking
+- `miner/tunnel.lua` - Tunnel step functions, ore checking
+- `miner/patterns.lua` - Mining patterns (perimeter, branches)
+- `mining/smart_miner.lua` - Entry point orchestrator
+
 **Usage:**
 
 ```
-smart_miner <length> [branches] [spacing]
+mining/smart_miner <size> [spacing]
 
-  length   - How far each branch extends (default: 50)
-  branches - Number of branches on each side (default: 5)
-  spacing  - Blocks between branches (default: 3)
+  size     - Target square size (default: 25)
+  spacing  - Blocks between branch tunnels (default: 3)
 ```
 
 **Setup:**
@@ -137,7 +152,7 @@ smart_miner <length> [branches] [spacing]
 2. Place a chest behind the turtle for deposits
 3. Add fuel to turtle inventory
 4. Optionally add torches to slot 16
-5. Run: `smart_miner 50 10`
+5. Run: `mining/smart_miner 25 3`
 
 For detailed in-game setup instructions, see [docs/gameplay_guide.md](docs/gameplay_guide.md).
 
@@ -187,11 +202,11 @@ Or press F3 in-game and look at a block to see its ID.
 ```bash
 # CORRECT - Run from tomfoolery root:
 cd /tomfoolery
-mining/smart_miner 50
+mining/smart_miner 25
 
 # WRONG - Don't cd into subdirectories:
 cd /tomfoolery/mining
-smart_miner 50   -- This will cause "module not found" errors!
+smart_miner 25   -- This will cause "module not found" errors!
 ```
 
 This is because CC:Tweaked's `require()` resolves paths relative to the running script's location.

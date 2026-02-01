@@ -2,7 +2,7 @@
 -- Downloads all required files from GitHub to the turtle
 --
 -- Usage:
---   1. First time: wget https://raw.githubusercontent.com/YOUR_USER/computercraft/main/scripts/tomfoolery/installer.lua installer
+--   1. First time: wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/installer.lua installer
 --   2. Or: pastebin get XXXXXX installer
 --   3. Run: installer
 --
@@ -33,6 +33,12 @@ local files = {
     { path = "common/fuel.lua",      required = true },
     { path = "common/config.lua",    required = true },
     { path = "common/turtle_actions.lua", required = false },
+
+    -- Miner modules (smart_miner dependencies)
+    { path = "miner/core.lua",       required = true },
+    { path = "miner/home.lua",       required = true },
+    { path = "miner/tunnel.lua",     required = true },
+    { path = "miner/patterns.lua",   required = true },
     
     -- Configuration files
     { path = "config/ores.cfg",      required = true },
@@ -45,6 +51,7 @@ local files = {
 -- Directories to create
 local directories = {
     "common",
+    "miner",
     "config", 
     "mining",
 }

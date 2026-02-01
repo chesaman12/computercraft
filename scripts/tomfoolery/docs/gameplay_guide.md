@@ -61,8 +61,8 @@ Download specific files directly:
 mkdir common
 mkdir config
 mkdir mining
-wget https://raw.githubusercontent.com/YOUR_USER/computercraft/main/scripts/tomfoolery/common/movement.lua common/movement.lua
-wget https://raw.githubusercontent.com/YOUR_USER/computercraft/main/scripts/tomfoolery/mining/smart_miner.lua mining/smart_miner.lua
+wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/common/movement.lua common/movement.lua
+wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/mining/smart_miner.lua mining/smart_miner.lua
 ```
 
 ### Method 3: Pastebin
@@ -121,7 +121,7 @@ http {
 
 **Script:** `mining/smart_miner.lua`
 
-An advanced branch mining turtle that efficiently exposes ore faces and automatically returns to deposit items.
+An advanced square perimeter mining turtle that efficiently exposes ore faces and automatically returns to deposit items.
 
 ### Setup Instructions
 
@@ -166,30 +166,29 @@ If you're using mods with custom ores:
 **IMPORTANT:** Always run scripts from the root installation directory (where `common/`, `mining/`, `config/` folders are). Do NOT `cd` into the `mining/` folder first.
 
 ```
-mining/smart_miner <length> [branches] [spacing]
+mining/smart_miner <size> [spacing]
 ```
 
 **Parameters:**
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| length | 50 | How far each branch extends |
-| branches | 5 | Number of branches on each side of main tunnel |
-| spacing | 3 | Blocks between branches (3 is optimal for ore exposure) |
+| size | 25 | Target square size |
+| spacing | 3 | Blocks between branch tunnels (3 is optimal for ore exposure) |
 
 **Examples:**
 
 ```
-mining/smart_miner 50          -- 50-block branches, 5 per side, spacing 3
-mining/smart_miner 100 10      -- 100-block branches, 10 per side
-mining/smart_miner 30 8 2      -- 30-block branches, 8 per side, spacing 2
+mining/smart_miner 25          -- 25x25 square with spacing 3
+mining/smart_miner 40 4        -- 40x40 square with spacing 4
+mining/smart_miner 30 2        -- 30x30 square with spacing 2
 ```
 
 ### Behavior
 
 Once started, the turtle will:
 
-1. **Mine a main tunnel** forward
-2. **Create side branches** alternating left and right
+1. **Mine a square perimeter** to set the outer boundary
+2. **Fill with parallel branch tunnels** across the square
 3. **Detect and mine ore veins** - follows connected ores
 4. **Discard junk** - drops cobblestone, dirt, gravel automatically
 5. **Place torches** every 8 blocks (if torches in slot 16)
@@ -199,21 +198,16 @@ Once started, the turtle will:
 
 ### Mining Pattern
 
-The turtle creates an efficient branch mine pattern:
+The turtle creates an efficient square perimeter pattern:
 
 ```
-         ← Branch (50 blocks) →
-         ========================
-                                 |
-    ─────────────────────────────┼── Main Tunnel
-                                 |
-         ========================
-         ← Branch (50 blocks) →
-              ↑
-           3 blocks spacing (optimal for ore exposure)
++-----------------------------+
+| | | | | | | | | | | | | | | |
+| | | | | | | | | | | | | | | |
++-----------------------------+
 ```
 
-With 3-block spacing, every ore vein within the mining area will have at least one block exposed to a tunnel.
+With 3-block spacing, every ore vein within the square mining area will have at least one block exposed to a tunnel.
 
 ### What Gets Kept vs. Discarded
 
@@ -304,7 +298,7 @@ thermal:nickel_ore
 
 - Make sure junk filtering is working
 - Check if `config/ores.cfg` accidentally includes junk blocks
-- Consider running with shorter branch lengths
+- Consider running with smaller square sizes
 
 ### Script Errors
 
