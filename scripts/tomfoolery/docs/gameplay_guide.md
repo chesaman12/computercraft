@@ -354,7 +354,30 @@ echo = true
 
 # Optional: Pastebin API key for more features
 # pastebin_key = YOUR_API_KEY
+
+# Discord webhook - log URLs are automatically sent here
+discord_webhook = https://discordapp.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
 ```
+
+### Discord Integration
+
+When a Discord webhook is configured, every log upload automatically sends the Pastebin URL to your Discord channel. This ensures you never lose the link even if the turtle's screen clears.
+
+The Discord message includes:
+
+- Computer ID and label
+- Current fuel level
+- Run statistics (blocks mined, ores found, etc.)
+- Direct link to the full Pastebin log
+
+To set up Discord notifications:
+
+1. In Discord, go to your channel settings → Integrations → Webhooks
+2. Create a new webhook and copy the URL
+3. Add it to `config/logger.cfg`:
+    ```
+    discord_webhook = https://discordapp.com/api/webhooks/...
+    ```
 
 ---
 

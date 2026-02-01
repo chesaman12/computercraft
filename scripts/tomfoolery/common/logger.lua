@@ -41,6 +41,7 @@ local config = {
     echo = true,
     log_path = nil,  -- auto-detect from program name
     pastebin_key = nil,  -- optional API key for uploads
+    discord_webhook = nil,  -- Discord webhook URL for notifications
 }
 
 local configLoaded = false
@@ -90,6 +91,9 @@ local function loadConfig()
     end
     if fileConfig.pastebin_key and fileConfig.pastebin_key ~= "" then
         config.pastebin_key = fileConfig.pastebin_key
+    end
+    if fileConfig.discord_webhook and fileConfig.discord_webhook ~= "" then
+        config.discord_webhook = fileConfig.discord_webhook
     end
 
     -- Auto-detect log path from program name if not set
@@ -395,9 +399,105 @@ Log File: %s
     end
 end
 
+-- ============================================
+-- DISCORD WEBHOOK
+-- ============================================
+
+--- Send a message to Discord via webhook
+-- @param message string The message to send
+-- @param pastebinUrl string|nil Optional Pastebin URL to include
+-- @param stats table|nil Optional stats to include in embed
+-- @return boolean Success
+function M.sendToDiscord(message, pastebinUrl, stats)
+    loadConfig()
+    
+    if not config.discord_webhook then
+        return false, "No Discord webhook configured"
+    end
+    
+    if not http then
+        return false, "HTTP API not available"
+    end
+    
+    -- Build embed for rich formatting
+    local embed = {
+        title = "🐢 Turtle Log",
+        color = 5814783,  -- Teal color
+        fields = {},
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+    
+    -- Add computer info
+    table.insert(embed.fields, {
+        name = "Computer",
+        value = string.format("ID: %d\nLabel: %s", 
+            os.getComputerID(), 
+            os.getComputerLabel() or "unlabeled"),
+        inline = true,
+    })
+    
+    -- Add fuel info if turtle
+    if turtle then
+        local fuel = turtle.getFuelLevel()
+        local fuelStr = fuel == "unlimited" and "Unlimited" or tostring(fuel)
+        table.insert(embed.fields, {
+            name = "Fuel",
+            value = fuelStr,
+            inline = true,
+        })
+    end
+    
+    -- Add stats if provided
+    if stats then
+        local statsLines = {}
+        for key, value in pairs(stats) do
+            table.insert(statsLines, string.format("%s: %s", key, tostring(value)))
+        end
+        if #statsLines > 0 then
+            table.insert(embed.fields, {
+                name = "Statistics",
+                value = table.concat(statsLines, "\n"),
+                inline = false,
+            })
+        end
+    end
+    
+    -- Add Pastebin link if provided
+    if pastebinUrl then
+        table.insert(embed.fields, {
+            name = "📋 Full Log",
+            value = pastebinUrl,
+            inline = false,
+        })
+    end
+    
+    -- Build payload
+    local payload = {
+        username = "Turtle Bot",
+        content = message,
+        embeds = { embed },
+    }
+    
+    local body = textutils.serializeJSON(payload)
+    
+    local response, err = http.post(
+        config.discord_webhook,
+        body,
+        { ["Content-Type"] = "application/json" }
+    )
+    
+    if response then
+        response.close()
+        return true
+    else
+        return false, err or "Unknown error"
+    end
+end
+
 --- Upload log and print the URL
 -- @param title string Optional title for the paste
-function M.uploadAndPrint(title)
+-- @param stats table Optional stats to include in Discord message
+function M.uploadAndPrint(title, stats)
     print("Uploading log to Pastebin...")
     local url, err = M.upload(title)
     
@@ -406,10 +506,34 @@ function M.uploadAndPrint(title)
         print(url)
         print("====================")
         log("info", "Log uploaded: %s", url)
+        
+        -- Send to Discord if configured
+        if config.discord_webhook then
+            print("Sending to Discord...")
+            local discordOk, discordErr = M.sendToDiscord(
+                "📋 **" .. (title or "Turtle Log") .. "**",
+                url,
+                stats
+            )
+            if discordOk then
+                print("✓ Sent to Discord!")
+                log("info", "Log URL sent to Discord")
+            else
+                print("Discord failed: " .. (discordErr or "unknown"))
+                log("warn", "Discord send failed: %s", discordErr or "unknown")
+            end
+        end
+        
         return url
     else
         printError("Upload failed: " .. (err or "unknown"))
         log("error", "Log upload failed: %s", err or "unknown")
+        
+        -- Try to send error to Discord anyway
+        if config.discord_webhook then
+            M.sendToDiscord("❌ **Log upload failed**: " .. (err or "unknown"), nil, stats)
+        end
+        
         return nil
     end
 end
@@ -429,7 +553,7 @@ function M.finalize(stats, title)
     M.section("Run Complete")
     log("info", "End time: Day %d, %s", os.day(), textutils.formatTime(os.time(), true))
     
-    return M.uploadAndPrint(title)
+    return M.uploadAndPrint(title, stats)
 end
 
 return M

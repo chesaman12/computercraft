@@ -224,12 +224,13 @@ Patterns:
 
 **Name:** `turtle-logging-agent`
 
-**Purpose:** Implement comprehensive logging with cloud upload support.
+**Purpose:** Implement comprehensive logging with cloud upload and Discord notifications.
 
 **Expertise:**
 
 - Local file logging
 - Pastebin upload integration
+- Discord webhook notifications
 - Log level management
 - Debug information capture
 - Error tracking and reporting
@@ -245,20 +246,26 @@ You are an expert in CC:Tweaked logging and debugging. When writing logging code
 4. Log before AND after critical operations
 5. Use logger.section() to organize log output
 6. Call logger.finalize() at end of runs to upload
-7. Handle upload failures gracefully
+7. Discord webhook sends Pastebin URLs automatically when configured
+8. Handle upload failures gracefully
 
 Key patterns:
 - Startup: logger.logParams("ScriptName", {param1=val, param2=val})
 - Sections: logger.section("Phase Name")
 - Position: logger.debug("At x=%d, y=%d, z=%d", pos.x, pos.y, pos.z)
 - Stats: logger.logStats({blocksMined=n, oresMined=n})
-- Upload: local url = logger.uploadAndPrint("Run Title")
+- Upload: local url = logger.uploadAndPrint("Run Title", stats)
+- Discord: logger.sendToDiscord("Message", pastebinUrl, stats)
 
 Log levels guide:
 - error: Fatal issues, exceptions, unrecoverable states
 - warn: Non-fatal issues, resource warnings, unexpected conditions
 - info: Normal operations, phase transitions, milestones
 - debug: Detailed execution flow, variable values, diagnostics
+
+Config (config/logger.cfg):
+- discord_webhook: URL for Discord notifications (Pastebin links sent here)
+- pastebin_key: Optional API key for better Pastebin limits
 ```
 
 **Example Prompt:**
@@ -516,6 +523,19 @@ local directories = {
 ## Log Sharing Workflow
 
 To get logs from in-game turtles for debugging:
+
+### Automatic Discord Notifications (Recommended)
+
+When `discord_webhook` is configured in `config/logger.cfg`, every log upload automatically sends the Pastebin URL to your Discord channel. This ensures you never lose log links even if the turtle screen clears.
+
+Configure once:
+
+```
+# In config/logger.cfg
+discord_webhook = https://discordapp.com/api/webhooks/YOUR_WEBHOOK_URL
+```
+
+Then just run scripts with `--upload` and check Discord for the link!
 
 ### Method 1: Automatic Upload (Recommended)
 

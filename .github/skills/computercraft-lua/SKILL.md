@@ -574,7 +574,7 @@ tomfoolery/
 ├── config/           # Runtime configuration
 │   ├── ores.cfg      # Ore block list
 │   ├── junk.cfg      # Junk block list
-│   └── logger.cfg    # Logging configuration
+│   └── logger.cfg    # Logging + Discord webhook config
 ├── upload_log.lua    # Upload logs to Pastebin
 └── installer.lua     # Downloads all files from GitHub
 ```
@@ -602,7 +602,7 @@ logger.warn("Warning: fuel low at %d", fuelLevel)
 logger.error("Error: %s", errorMessage)
 logger.debug("Position: x=%d, y=%d, z=%d", x, y, z)
 
--- At end of run (uploads to Pastebin)
+-- At end of run (uploads to Pastebin + sends to Discord)
 logger.finalize(stats, "Run Title")
 ```
 
@@ -612,6 +612,15 @@ Log levels:
 - **warn**: Resource warnings, unexpected but recoverable conditions
 - **info**: Normal operations, phase changes, milestones
 - **debug**: Detailed flow, variable values, diagnostics
+
+### Discord Integration
+
+Configure `discord_webhook` in `config/logger.cfg` to automatically receive Pastebin URLs in Discord when logs are uploaded. This prevents losing log links when turtle screens clear.
+
+```lua
+-- config/logger.cfg
+discord_webhook = https://discordapp.com/api/webhooks/YOUR_WEBHOOK_URL
+```
 
 ### Module Dependency Pattern
 
