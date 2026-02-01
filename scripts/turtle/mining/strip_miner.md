@@ -1,12 +1,13 @@
-# Strip Miner (parallel corridors, 1x3 height)
+# Strip Miner (symmetric grid, 1x3 height)
 
-This document describes the algorithm implemented by `strip_miner.lua` for **parallel corridor mining** with **3-block rock gaps** and **1x3 corridor height**, plus end-of-run statistics (moves/turns/fuel/time).
+This document describes the algorithm implemented by `strip_miner.lua` for **symmetric grid mining** with **3-block rock gaps** and **1x3 corridor height**, plus end-of-run statistics (moves/turns/fuel/time).
 
 ## Goals
 
-- Mine long, parallel corridors with minimal non-mining travel.
+- Mine a **symmetric rectangular grid** of parallel corridors.
 - Keep **3 blocks of rock** between corridors so a player can run and scan for ores.
 - Maintain a **1-wide by 3-tall** tunnel profile.
+- Both ends of the grid are connected (easy navigation).
 - Handle inventory pressure according to `fullMode`.
 - Stay safe on fuel by ensuring enough to return home.
 
@@ -27,17 +28,34 @@ Every successful `turtle.forward()` increments the corresponding axis.
 
 1. Read parameters (`corridorLength`, `corridorCount`, `gap`, `returnHome`, `fullMode`).
 2. Estimate required fuel and call `fuel.ensureFuel(...)`.
-3. Mine `corridorCount` corridors of length `corridorLength`.
-4. Between corridors, shift sideways by `gap + 1` blocks (connector at each end).
+3. **Phase 1**: Mine the perimeter rectangle (bottom bar → right corridor → top bar → left corridor).
+4. **Phase 2**: Fill in interior corridors by branching off the bars.
 5. Optionally return to start.
 6. Print statistics (time, moves, turns, fuel used).
 
-## Corridor mining pattern
+## Symmetric grid pattern
 
-- The turtle mines the first corridor forward (+Z).
-- At the end, it turns right, shifts +X by `gap + 1`, turns right again, and mines back (-Z).
-- This creates a **snake pattern** with minimal backtracking.
-- Each connector at the end is also mined (no “empty travel”).
+The turtle mines a clean rectangular outline first, then fills in the middle corridors:
+
+```
+Phase 1 (perimeter):
+     x: 0 1 2 3 4 5 6 7 8
+z=10:  ■ ■ ■ ■ ■ ■ ■ ■ ■   <- top bar
+       ■               ■
+       ■               ■   <- left + right corridors
+       ■               ■
+z=0:   ■ ■ ■ ■ ■ ■ ■ ■ ■   <- bottom bar (start here)
+
+Phase 2 (interior):
+     x: 0 1 2 3 4 5 6 7 8
+z=10:  ■ ■ ■ ■ ■ ■ ■ ■ ■
+       ■       ■       ■
+       ■       ■       ■   <- middle corridor at x=4
+       ■       ■       ■
+z=0:   ■ ■ ■ ■ ■ ■ ■ ■ ■
+```
+
+This creates a **fully connected symmetric grid** that's easy for a player to navigate.
 
 ## 1x3 height clearing
 
@@ -78,34 +96,35 @@ The run prints:
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Read user params]
-    B --> C[Estimate required moves]
-    C --> D{ensureFuel OK?}
-    D -- no --> Z[Exit]
-    D -- yes --> E[Init stats + progress]
-
-    E --> F{corridor = 1..count}
-    F --> G[Mine corridor length]
-    G --> H{More corridors?}
-    H -- yes --> I[Shift +X by gap+1]
+    A[Start at 0,0] --> B[Mine bottom bar +X]
+    B --> C[Mine right corridor +Z]
+    C --> D[Mine top bar -X]
+    D --> E[Mine left corridor -Z]
+    E --> F{More interior corridors?}
+    
+    F -- yes --> G[Navigate to next corridor x]
+    G --> H[Mine corridor +Z]
+    H --> I[Walk back -Z if more]
     I --> F
-    H -- no --> J{Return home?}
-
-    J -- yes --> K[goTo(0,0)]
+    
+    F -- no --> J{Return home?}
+    J -- yes --> K[goTo 0,0]
     J -- no --> L[Stay put]
-
-    K --> M[Print stats + completion]
+    
+    K --> M[Print stats]
     L --> M
     M --> N[End]
 ```
 
-## Snake pattern (top-down)
+## Final shape (top-down)
 
-```mermaid
-flowchart LR
-    A[Start] --> B[Corridor 1 (+Z)] --> C[Shift +X]
-    C --> D[Corridor 2 (-Z)] --> E[Shift +X]
-    E --> F[Corridor 3 (+Z)] --> G[...]
+```
+■■■■■■■■■   z=length (top bar)
+■   ■   ■
+■   ■   ■   interior corridors
+■   ■   ■
+■■■■■■■■■   z=0 (bottom bar + start)
+x=0   x=4   x=8
 ```
 
 ## Notes / tuning suggestions

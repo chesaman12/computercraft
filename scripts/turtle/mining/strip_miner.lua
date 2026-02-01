@@ -60,6 +60,7 @@ local moveCount = 0
 local turnCount = 0
 local startTime = 0
 local startFuel = 0
+local canReturnHome = true
 
 local function showProgress()
     if totalSteps > 0 then
@@ -178,11 +179,19 @@ local function clearCeiling2()
         if attempts > MAX_DIG_ATTEMPTS then
             logger.error("Stuck on unbreakable block above (level 2) at x=%d z=%d", posX, posZ)
             print("\nStuck on unbreakable block above.")
+            if not moveDownSafe() then
+                logger.error("Cannot return to ground at x=%d z=%d", posX, posZ)
+                print("\nCannot return to ground.")
+                canReturnHome = false
+            end
             return false
         end
     end
 
     if not moveDownSafe() then
+        logger.error("Cannot return to ground at x=%d z=%d", posX, posZ)
+        print("\nCannot return to ground.")
+        canReturnHome = false
         return false
     end
 
@@ -364,38 +373,78 @@ local function mineForward(fullMode)
     return true
 end
 
-local function mineParallelCorridors(corridorLength, corridorCount, gap, fullMode)
+--- Symmetric grid: perimeter rectangle + interior corridors
+-- Creates a clean rectangular shape with all corridors connected at both ends
+local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode)
     local shift = gap + 1
-    for corridor = 1, corridorCount do
-        logger.debug("Mining corridor %d/%d at x=%d z=%d", corridor, corridorCount, posX, posZ)
-        for i = 1, corridorLength do
-            if not mineForward(fullMode) then return false end
-        end
-
-        if corridor < corridorCount then
-            if dir == 0 then
-                turnRight()
-                for i = 1, shift do
-                    if not mineForward(fullMode) then return false end
+    local maxX = (corridorCount - 1) * shift
+    
+    logger.debug("Mining symmetric grid: length=%d, corridors=%d, maxX=%d", corridorLength, corridorCount, maxX)
+    
+    -- Phase 1: Mine the perimeter rectangle
+    -- Bottom bar: mine from x=0 to x=maxX at z=0
+    logger.debug("Phase 1a: Mining bottom bar at z=0")
+    turnTo(1) -- face +X
+    for i = 1, maxX do
+        if not mineForward(fullMode) then return false end
+    end
+    -- Now at (maxX, 0)
+    
+    -- Right corridor: mine from z=0 to z=corridorLength at x=maxX
+    logger.debug("Phase 1b: Mining right corridor at x=%d", maxX)
+    turnTo(0) -- face +Z
+    for i = 1, corridorLength do
+        if not mineForward(fullMode) then return false end
+    end
+    -- Now at (maxX, corridorLength)
+    
+    -- Top bar: mine from x=maxX to x=0 at z=corridorLength
+    logger.debug("Phase 1c: Mining top bar at z=%d", corridorLength)
+    turnTo(3) -- face -X
+    for i = 1, maxX do
+        if not mineForward(fullMode) then return false end
+    end
+    -- Now at (0, corridorLength)
+    
+    -- Left corridor: mine from z=corridorLength to z=0 at x=0
+    logger.debug("Phase 1d: Mining left corridor at x=0")
+    turnTo(2) -- face -Z
+    for i = 1, corridorLength do
+        if not mineForward(fullMode) then return false end
+    end
+    -- Now back at (0, 0), facing -Z
+    
+    -- Phase 2: Fill in interior corridors
+    if corridorCount > 2 then
+        logger.debug("Phase 2: Mining %d interior corridors", corridorCount - 2)
+        for corridor = 2, corridorCount - 1 do
+            local corridorX = (corridor - 1) * shift
+            -- Navigate to corridor start via bottom bar (already mined)
+            turnTo(1) -- face +X
+            for i = 1, shift do
+                if not moveForwardSafe() then return false end
+            end
+            -- Now at (corridorX, 0)
+            
+            -- Mine this corridor upward
+            logger.debug("Mining interior corridor %d at x=%d", corridor, corridorX)
+            turnTo(0) -- face +Z
+            for i = 1, corridorLength do
+                if not mineForward(fullMode) then return false end
+            end
+            -- Now at (corridorX, corridorLength)
+            
+            -- Walk back down via the corridor we just mined (if more corridors to do)
+            if corridor < corridorCount - 1 then
+                turnTo(2) -- face -Z
+                for i = 1, corridorLength do
+                    if not moveForwardSafe() then return false end
                 end
-                turnRight()
-            elseif dir == 2 then
-                turnLeft()
-                for i = 1, shift do
-                    if not mineForward(fullMode) then return false end
-                end
-                turnLeft()
-            else
-                logger.warn("Unexpected direction %d, realigning", dir)
-                turnTo(0)
-                turnRight()
-                for i = 1, shift do
-                    if not mineForward(fullMode) then return false end
-                end
-                turnRight()
+                -- Back at (corridorX, 0)
             end
         end
     end
+    
     return true
 end
 
@@ -420,10 +469,14 @@ local function main()
     })
 
     local shift = gap + 1
-    local corridorMoves = corridorLength * corridorCount
-    local shiftMoves = (corridorCount - 1) * shift
-    local totalMiningMoves = corridorMoves + shiftMoves
-    local estimatedReturn = returnHome and (corridorLength + shiftMoves) or 0
+    local maxX = (corridorCount - 1) * shift
+    -- Perimeter: 2 bars (maxX each) + 2 outer corridors (corridorLength each)
+    -- Interior: (corridorCount - 2) corridors of corridorLength each
+    local perimeterMoves = (maxX * 2) + (corridorLength * 2)
+    local interiorMoves = (corridorCount - 2) * corridorLength
+    local totalMiningMoves = perimeterMoves + interiorMoves
+    -- Return path: walk back through existing tunnels
+    local estimatedReturn = returnHome and (maxX + corridorLength) or 0
     local estimatedMoves = totalMiningMoves + estimatedReturn
 
     totalSteps = totalMiningMoves
@@ -440,15 +493,18 @@ local function main()
     print("Mining " .. totalSteps .. " blocks...")
 
     local aborted = false
-    if not mineParallelCorridors(corridorLength, corridorCount, gap, fullMode) then
+    if not mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode) then
         aborted = true
     end
 
     print("")
-    if returnHome then
+    if returnHome and canReturnHome then
         logger.info("Returning home from x=%d z=%d", posX, posZ)
         print("Returning home...")
         goTo(0, 0, 0)
+    elseif returnHome then
+        logger.warn("Skipping return home because turtle is not at ground level")
+        print("Skipping return home (turtle not at ground level).")
     end
 
     -- Calculate statistics
