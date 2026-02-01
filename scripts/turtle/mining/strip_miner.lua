@@ -378,7 +378,7 @@ local function tryRefuel(minFuel)
         return true
     end
     for slot = 1, 16 do
-        if slot ~= TORCH_SLOT and turtle.getItemCount(slot) > 0 then
+        if slot ~= TORCH_SLOT and slot ~= FUEL_SLOT and turtle.getItemCount(slot) > 0 then
             turtle.select(slot)
             if turtle.refuel(0) then
                 turtle.refuel()
@@ -402,7 +402,7 @@ local function refuelFromChest(minFuel)
         attempts = attempts + 1
         local emptySlot = nil
         for slot = 1, 16 do
-            if slot ~= TORCH_SLOT and turtle.getItemCount(slot) == 0 then
+            if slot ~= TORCH_SLOT and slot ~= FUEL_SLOT and turtle.getItemCount(slot) == 0 then
                 emptySlot = slot
                 break
             end
@@ -547,6 +547,7 @@ local function isOre(name)
     return oreList[name] == true
 end
 
+-- Return (dx, dz) delta for the current facing direction.
 local function getForwardDelta()
     if dir == 0 then
         return 0, 1
@@ -583,6 +584,8 @@ local function moveBackSafe()
     return ok
 end
 
+--- Recursively mine connected ore blocks.
+-- @param visited table Table of "x:y:z" keys to avoid revisiting nodes.
 local function mineVein(visited)
     local key = posX .. ":" .. posY .. ":" .. posZ
     visited[key] = true
@@ -940,6 +943,7 @@ local function main()
         logger.info("Returning home from x=%d y=%d z=%d", posX, posY, posZ)
         print("Returning home...")
         goTo(0, 0, 0, 0)
+        -- Final dump after returning home to clear any remaining ore.
         dumpToChestBehindStart()
     elseif returnHome then
         logger.warn("Skipping return home because turtle is not at ground level")
