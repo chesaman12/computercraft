@@ -39,7 +39,7 @@ All bots require:
 The easiest way to install all scripts at once:
 
 ```
-wget https://raw.githubusercontent.com/chesaman12/computercraft/tom-branch/scripts/tomfoolery/installer.lua installer
+wget https://raw.githubusercontent.com/chesaman12/computercraft/main/scripts/tomfoolery/installer.lua installer
 installer
 ```
 
@@ -61,8 +61,8 @@ Download specific files directly:
 mkdir common
 mkdir config
 mkdir mining
-wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/common/movement.lua common/movement.lua
-wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/mining/smart_miner.lua mining/smart_miner.lua
+wget https://raw.githubusercontent.com/chesaman12/computercraft/main/scripts/tomfoolery/common/movement.lua common/movement.lua
+wget https://raw.githubusercontent.com/chesaman12/computercraft/main/scripts/tomfoolery/mining/smart_miner.lua mining/smart_miner.lua
 ```
 
 ### Method 3: Pastebin

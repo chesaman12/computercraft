@@ -12,6 +12,7 @@ M.config = {
     -- Square mining parameters
     squareSize = 25,
     branchSpacing = 3,
+    edgeOffset = 1,
     tunnelHeight = 2,
     
     -- Pokehole mining (wiki "Layout 6")
@@ -161,9 +162,10 @@ end
 -- @return number, number Adjusted size, number of branches
 function M.calculateAdjustedSize(targetSize)
     local spacing = M.config.branchSpacing + 1
-    local numBranches = math.floor((targetSize - 2 - spacing) / spacing)
+    local edgeOffset = M.config.edgeOffset
+    local numBranches = math.floor((targetSize - (edgeOffset * 2) - spacing) / spacing)
     if numBranches < 1 then numBranches = 1 end
-    local adjustedSize = 2 + spacing * (numBranches + 1)
+    local adjustedSize = (edgeOffset * 2) + spacing * (numBranches + 1)
     return adjustedSize, numBranches
 end
 

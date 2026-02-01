@@ -503,7 +503,7 @@ local function refuelFromChest(minFuel)
         return true
     end
     local attempts = 0
-    while turtle.getFuelLevel() < minFuel and attempts < SINGLE_CHEST_CAPACITY do -- Single chest capacity.
+    while turtle.getFuelLevel() < minFuel and attempts < SINGLE_CHEST_CAPACITY do
         attempts = attempts + 1
         local emptySlot = nil
         for slot = 1, 16 do

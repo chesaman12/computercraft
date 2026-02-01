@@ -2,7 +2,7 @@
 -- Downloads all required files from GitHub to the turtle
 --
 -- Usage:
---   1. First time: wget https://raw.githubusercontent.com/YOUR_USER/computercraft/tom-branch/scripts/tomfoolery/installer.lua installer
+--   1. First time: wget https://raw.githubusercontent.com/chesaman12/computercraft/main/scripts/tomfoolery/installer.lua installer
 --   2. Or: pastebin get XXXXXX installer
 --   3. Run: installer
 --
@@ -13,7 +13,7 @@
 -- ============================================
 local GITHUB_USER = "chesaman12"  -- Change this to your GitHub username
 local GITHUB_REPO = "computercraft"   -- Change this to your repo name
-local GITHUB_BRANCH = "tom-branch"    -- Change if using different branch (e.g., "main")
+local GITHUB_BRANCH = "main"          -- Change if using different branch
 
 -- Base URL for raw GitHub content
 local baseUrl = string.format(

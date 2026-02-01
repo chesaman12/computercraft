@@ -11,7 +11,7 @@
 --
 -- Usage: smart_miner <size> [spacing]
 --   size:    Target square size (default: 25)
---   spacing: Blocks between branches (default: 3)
+--   spacing: Blocks between branch tunnels (default: 3)
 --
 -- Run from root installation directory: mining/smart_miner 25
 --
