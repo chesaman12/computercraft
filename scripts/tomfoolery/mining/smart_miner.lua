@@ -20,21 +20,31 @@
 -- ============================================
 -- PATH SETUP - Required for require() to work
 -- ============================================
--- This finds the root directory and adds it to package.path
--- so that require("common.movement") works correctly
+-- CC:Tweaked's require() resolves relative to the script location.
+-- This function finds the absolute root directory and adds it to package.path
+-- so that require("common.movement") works correctly from any subdirectory.
 local function setupPaths()
+    -- Get the absolute path to this script
     local scriptPath = shell.getRunningProgram()
-    local scriptDir = scriptPath:match("(.*/)" ) or ""
+    local absPath = "/" .. shell.resolve(scriptPath)
+    
+    -- Extract the directory containing this script
+    -- e.g., "/mining/smart_miner.lua" -> "/mining/"
+    local scriptDir = absPath:match("(.+/)") or "/"
     
     -- Go up one directory from mining/ to find common/
-    local rootDir = scriptDir:match("(.*/)[^/]+/$") or ""
-    
-    -- If we're already at root (no subdirectory), use current dir
-    if rootDir == "" and not scriptDir:match("/") then
-        rootDir = ""
+    -- e.g., "/mining/" -> "/"
+    -- e.g., "/tomfoolery/mining/" -> "/tomfoolery/"
+    local rootDir
+    if scriptDir == "/" then
+        rootDir = "/"
+    else
+        -- Remove trailing slash, get parent, add trailing slash
+        local withoutTrailing = scriptDir:sub(1, -2)  -- "/mining" or "/tomfoolery/mining"
+        rootDir = withoutTrailing:match("(.*/)" ) or "/"  -- "/" or "/tomfoolery/"
     end
     
-    -- Add root to package path
+    -- Add root to package path with ABSOLUTE paths
     package.path = rootDir .. "?.lua;" .. rootDir .. "?/init.lua;" .. package.path
     
     return rootDir
