@@ -322,7 +322,7 @@ local function branchMine()
     print(string.format("Branch mining pattern:"))
     print(string.format("  Main tunnel: %d blocks", mainTunnelLength))
     print(string.format("  Branches: %d per side, %d blocks each", CONFIG.branchCount, CONFIG.branchLength))
-    print(string.format("  Spacing: %d blocks between branches"))
+    print(string.format("  Spacing: %d blocks between branches", CONFIG.branchSpacing))
     print("")
     sleep(2)
     
