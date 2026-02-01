@@ -146,14 +146,20 @@ function M.mineInternalBranches()
     local adjustedSize = core.config.adjustedSquareSize
     local _, numBranches = core.calculateAdjustedSize(core.config.squareSize)
     
-    local startOffset = core.config.branchSpacing + 1
-    local branchLength = adjustedSize - 2 * startOffset
+    -- branchSpacing is the north-south spacing between branches
+    local branchSpacing = core.config.branchSpacing + 1
+    
+    -- Branches start 1 block inside the perimeter and span nearly the full width
+    local edgeMargin = 1  -- 1 block inside the perimeter on each side
+    local branchLength = adjustedSize - (2 * edgeMargin)
     
     print("=== Mining Internal Branches ===")
     print(string.format("  Branches: %d, Length: %d", numBranches, branchLength))
+    print(string.format("  Spacing: %d, EdgeMargin: %d", branchSpacing, edgeMargin))
     
     if numBranches < 1 or branchLength < 1 then
         print("ERROR: Invalid branch parameters!")
+        print(string.format("  adjustedSize=%d, branchLength=%d", adjustedSize, branchLength))
         return
     end
     
@@ -169,14 +175,15 @@ function M.mineInternalBranches()
         core.movement.goHome(true)
         core.movement.turnTo(0)
         
-        -- Calculate branch Z position
-        local branchZ = startOffset + (branchNum - 1) * (core.config.branchSpacing + 1)
+        -- Calculate branch Z position (north-south offset from origin)
+        -- First branch at branchSpacing, then every branchSpacing blocks after
+        local branchZ = branchSpacing + (branchNum - 1) * branchSpacing
         
-        print(string.format("Target: X=%d, Z=%d", startOffset, branchZ))
+        print(string.format("Target: X=%d, Z=%d", edgeMargin, branchZ))
         
-        -- Mine east to startOffset
-        print(string.format("Mining EAST %d blocks...", startOffset))
-        for i = 1, startOffset do
+        -- Mine east to edgeMargin (just 1 block inside the perimeter)
+        print(string.format("Mining EAST %d blocks...", edgeMargin))
+        for i = 1, edgeMargin do
             core.mining.digForward()
             turtle.digUp()
             core.movement.forward(true)
