@@ -13,15 +13,18 @@ tomfoolery/
 │   ├── fuel.lua        # Fuel management
 │   └── config.lua      # Configuration file loader
 │
+├── miner/            # Smart miner modules
+│   ├── core.lua        # Configuration, state, statistics
+│   ├── home.lua        # Home navigation, deposits, restocking
+│   ├── tunnel.lua      # Tunnel step functions, ore checking
+│   └── patterns.lua    # Mining patterns (perimeter, branches)
+│
 ├── config/           # Configuration files
 │   ├── ores.cfg        # Ore block IDs to detect and mine
 │   └── junk.cfg        # Junk block IDs to discard
 │
-├── mining/           # Mining automation scripts
-│   ├── smart_miner.lua # Advanced branch mining with ore detection
-│   ├── basicActions.lua     # (Legacy) Basic digging actions
-│   ├── basicTurtleCommands.lua # (Legacy) Turtle command wrappers
-│   └── miningTunnel.lua     # (Legacy) Simple tunnel script
+├── mining/           # Mining automation entry points
+│   └── smart_miner.lua # Advanced branch mining with ore detection
 │
 ├── docs/             # Documentation
 │   ├── gameplay_guide.md   # In-game setup and usage guide
@@ -112,23 +115,35 @@ local needed = fuel.estimateReturnFuel(movement.getPosition())
 
 ### smart_miner.lua
 
-An advanced branch mining script that:
+An advanced square perimeter mining script that:
 
-- Creates efficient branch mine patterns (3-block spacing exposes all ores)
-- Tracks position and returns home when inventory is full
+- Mines a square perimeter, then fills with parallel branch tunnels
+- Auto-adjusts size for proper spacing (3 blocks between edges/branches)
+- Uses pokehole mining (wiki-recommended) for optimal ore exposure
+- Tracks position and returns home when inventory is full or fuel is low
 - Deposits items in a chest at start position
 - Detects and follows ore veins
-- Manages fuel automatically
+- Manages fuel automatically (idles at home if empty)
 - Discards junk blocks (cobblestone, dirt, gravel)
+- Places torches at regular intervals (mandatory)
+
+**Architecture:**
+
+The smart miner uses a modular design:
+
+- `miner/core.lua` - Configuration, state, statistics
+- `miner/home.lua` - Home navigation, deposits, restocking
+- `miner/tunnel.lua` - Tunnel step functions, ore checking
+- `miner/patterns.lua` - Mining patterns (perimeter, branches)
+- `mining/smart_miner.lua` - Entry point orchestrator
 
 **Usage:**
 
 ```
-smart_miner <length> [branches] [spacing]
+mining/smart_miner <size> [spacing]
 
-  length   - How far each branch extends (default: 50)
-  branches - Number of branches on each side (default: 5)
-  spacing  - Blocks between branches (default: 3)
+  size    - Target square size (auto-adjusted for proper spacing, default: 25)
+  spacing - Blocks between branches (default: 3)
 ```
 
 **Setup:**
@@ -136,8 +151,8 @@ smart_miner <length> [branches] [spacing]
 1. Place turtle at desired mining level (Y=11 for diamonds in old worlds, Y=-59 for deepslate diamonds)
 2. Place a chest behind the turtle for deposits
 3. Add fuel to turtle inventory
-4. Optionally add torches to slot 16
-5. Run: `smart_miner 50 10`
+4. Add torches to slot 16 (required)
+5. Run: `mining/smart_miner 25`
 
 For detailed in-game setup instructions, see [docs/gameplay_guide.md](docs/gameplay_guide.md).
 

@@ -21,13 +21,16 @@ I am an expert in developing Lua scripts for CC:Tweaked (ComputerCraft) mod in M
 ### The CC:Tweaked Environment
 
 CC:Tweaked provides programmable computers and turtles in Minecraft:
+
 - **Computers**: Stationary terminals for running programs
 - **Turtles**: Mobile robots that can move, mine, build, and interact
 - **Pocket Computers**: Portable computers players can carry
 - **Peripherals**: External devices (monitors, modems, speakers, drives)
 
 ### Lua Version
+
 CC:Tweaked 1.109.0+ uses **Lua 5.2**. Key differences from 5.1:
+
 - Use `...` for varargs (not `arg`)
 - Use `_ENV` for environments (not `getfenv/setfenv`)
 - No binary chunk support
@@ -36,6 +39,7 @@ CC:Tweaked 1.109.0+ uses **Lua 5.2**. Key differences from 5.1:
 ### API Categories
 
 #### 1. Turtle API (Robotic Control)
+
 ```lua
 -- Movement (all return success, errorMessage)
 turtle.forward()    turtle.back()
@@ -79,6 +83,7 @@ turtle.craft(limit?)
 ```
 
 #### 2. Event System
+
 ```lua
 -- Pull events (yields execution)
 local event, p1, p2, p3 = os.pullEvent(filter?)
@@ -102,6 +107,7 @@ local event, ... = os.pullEventRaw(filter?)  -- catches terminate
 ```
 
 #### 3. Rednet Communication
+
 ```lua
 -- Setup
 rednet.open("back")  -- open modem on specified side
@@ -121,6 +127,7 @@ rednet.lookup(protocol, hostname?) -- returns id or table of ids
 ```
 
 #### 4. Peripheral API
+
 ```lua
 -- Discovery
 peripheral.getNames()           -- list all peripherals
@@ -141,6 +148,7 @@ peripheral.call(side, "method", args...)
 ```
 
 #### 5. File System
+
 ```lua
 -- Reading/Writing
 local file = fs.open("path", mode) -- "r", "w", "a", "rb", "wb", "ab"
@@ -162,6 +170,7 @@ fs.getFreeSpace(path)
 ```
 
 #### 6. HTTP (when enabled)
+
 ```lua
 -- Synchronous
 local response = http.get(url, headers?, binary?)
@@ -181,6 +190,7 @@ ws.close()
 ```
 
 #### 7. Term & Display
+
 ```lua
 term.write(text)
 term.clear()
@@ -199,6 +209,7 @@ term.redirect(mon)       -- redirect output to monitor
 ```
 
 #### 8. Parallel Execution
+
 ```lua
 -- Run until any function completes
 parallel.waitForAny(func1, func2, ...)
@@ -208,6 +219,7 @@ parallel.waitForAll(func1, func2, ...)
 ```
 
 #### 9. Redstone API
+
 ```lua
 -- Read redstone input from a side
 redstone.getInput("top")      -- returns boolean
@@ -223,6 +235,7 @@ redstone.setBundledOutput("back", colors.combine(colors.red, colors.blue))
 ```
 
 #### 10. Colors API
+
 ```lua
 -- Color constants for term, monitors, bundled cables
 colors.white, colors.orange, colors.magenta, colors.lightBlue
@@ -239,6 +252,7 @@ colors.test(combined, colors.blue)  -- returns boolean
 ### Best Practices
 
 #### 1. Always Handle Failures
+
 ```lua
 local function safeDig()
     local success, err = turtle.dig()
@@ -251,6 +265,7 @@ end
 ```
 
 #### 2. Yield Regularly
+
 ```lua
 -- Prevent "Too long without yielding" error
 for i = 1, 10000 do
@@ -262,6 +277,7 @@ end
 ```
 
 #### 3. Manage Fuel
+
 ```lua
 local function ensureFuel(minLevel)
     local fuel = turtle.getFuelLevel()
@@ -283,6 +299,7 @@ end
 ```
 
 #### 4. Use Require for Modules
+
 ```lua
 -- utils.lua
 local M = {}
@@ -297,6 +314,7 @@ utils.log("Started")
 ```
 
 #### 5. Startup Scripts
+
 ```lua
 -- startup.lua (runs on boot)
 shell.run("bg_program")  -- run in background
@@ -304,6 +322,7 @@ shell.run("main")        -- run main program
 ```
 
 #### 6. Packaging and Deployment
+
 - Keep an entry point per program (`startup`, `startup.lua`, or `main.lua`).
 - Organize helpers as modules and load with `require` from the same folder.
 - Avoid spaces in file names to simplify `pastebin` and `wget` usage.
@@ -316,6 +335,7 @@ shell.run("main")        -- run main program
 ### Common Patterns
 
 #### Mining Turtle Pattern
+
 ```lua
 local function mineForward()
     while turtle.detect() do
@@ -327,6 +347,7 @@ end
 ```
 
 #### Event Server Pattern
+
 ```lua
 rednet.open("back")
 rednet.host("myservice", "server1")
@@ -341,6 +362,7 @@ end
 ```
 
 #### GPS Locate Pattern
+
 ```lua
 local x, y, z = gps.locate(5)  -- 5 second timeout
 if x then
@@ -351,6 +373,7 @@ end
 ```
 
 #### User Input Pattern
+
 ```lua
 write("length: ")
 local length = tonumber(read())
@@ -366,6 +389,7 @@ end
 ```
 
 #### Fuel Check with User Prompt
+
 ```lua
 local MIN_FUEL_LEVEL = 100
 
@@ -381,10 +405,11 @@ end
 ```
 
 #### Gravel/Sand Safe Dig Pattern
+
 ```lua
 -- Keep digging until block stops falling
 local function digUntilEmpty()
-    while turtle.detect() do 
+    while turtle.detect() do
         turtle.dig()
         sleep(0.4)  -- wait for falling blocks
     end
@@ -398,6 +423,7 @@ end
 ```
 
 #### Redstone Control Loop
+
 ```lua
 -- Monitor redstone and control outputs
 while true do
@@ -412,6 +438,7 @@ end
 ```
 
 #### Safe Rednet Open
+
 ```lua
 local function safeRednetOpen(side)
     if not rednet.isOpen() then
@@ -421,6 +448,7 @@ end
 ```
 
 #### GPS Position Transmitter
+
 ```lua
 local function getCords()
     while true do
@@ -447,6 +475,7 @@ end
 ```
 
 #### Message Receiver with Redstone Output
+
 ```lua
 local function startReceiver(messageName, redstoneSide, value)
     safeRednetOpen("top")
@@ -461,6 +490,7 @@ end
 ```
 
 #### Inventory Slot Rotation
+
 ```lua
 local slot = 1
 
@@ -476,6 +506,7 @@ end
 ```
 
 #### 3D Mining Loop Pattern
+
 ```lua
 local turn = "left"
 
@@ -517,3 +548,49 @@ end
 - GitHub: https://github.com/cc-tweaked/CC-Tweaked
 - Workspace docs: `docs/cc-tweaked/`
 - Example scripts: `scripts/turtle/`, `scripts/computer/`
+
+## Tomfoolery Project Structure
+
+The `scripts/tomfoolery/` project uses a modular architecture:
+
+```
+tomfoolery/
+├── common/           # Shared utility libraries
+│   ├── movement.lua  # Position tracking, safe movement
+│   ├── inventory.lua # Item management, junk filtering
+│   ├── mining.lua    # Ore detection, safe digging
+│   ├── fuel.lua      # Fuel management, auto-refuel
+│   └── config.lua    # Config file loading
+├── miner/            # Smart miner modules
+│   ├── core.lua      # Config, state, stats, utilities
+│   ├── home.lua      # Home navigation, deposits, restocking
+│   ├── tunnel.lua    # Tunnel step functions, ore checking
+│   └── patterns.lua  # Mining patterns (perimeter, branches)
+├── mining/           # Mining entry point scripts
+│   └── smart_miner.lua  # Thin orchestrator
+├── config/           # Runtime configuration
+│   ├── ores.cfg      # Ore block list
+│   └── junk.cfg      # Junk block list
+└── installer.lua     # Downloads all files from GitHub
+```
+
+### Module Dependency Pattern
+
+Modules use dependency injection via `init()` functions:
+
+```lua
+-- In miner/core.lua
+local M = {}
+M.movement = nil  -- Set by init()
+
+function M.init(deps)
+    M.movement = deps.movement
+    M.inventory = deps.inventory
+end
+
+-- In smart_miner.lua (entry point)
+local core = require("miner.core")
+core.init({ movement = movement, inventory = inventory })
+```
+
+This pattern allows modules to be tested independently and avoids circular dependencies.

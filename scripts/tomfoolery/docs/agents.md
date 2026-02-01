@@ -214,22 +214,49 @@ Patterns:
 
 **Purpose:** Create complete mining automation solutions.
 
+**Architecture:**
+
+The smart miner uses a modular architecture with focused modules:
+
+| Module        | Path                     | Responsibility                            |
+| ------------- | ------------------------ | ----------------------------------------- |
+| `core`        | `miner/core.lua`         | Configuration, state, stats, utilities    |
+| `home`        | `miner/home.lua`         | Home navigation, deposits, restocking     |
+| `tunnel`      | `miner/tunnel.lua`       | Ore detection, digging, tunnel steps      |
+| `patterns`    | `miner/patterns.lua`     | High-level patterns (perimeter, branches) |
+| `smart_miner` | `mining/smart_miner.lua` | Thin orchestrator, entry point            |
+
+**Module Initialization Pattern:**
+
+```lua
+-- Main script initializes modules with dependencies
+local core = require("miner.core")
+local home = require("miner.home")
+local tunnel = require("miner.tunnel")
+local patterns = require("miner.patterns")
+
+core.init({ movement = movement, inventory = inventory, mining = miningUtils, fuel = fuel })
+home.init(core)
+tunnel.init(core)
+patterns.init(core, home, tunnel)
+```
+
 **Instructions:**
 
 ```
-You are building a complete mining automation system. Combine:
-- Movement: Position tracking and safe navigation
-- Inventory: Junk filtering and chest deposits
-- Mining: Ore detection and optimal patterns
-- Fuel: Range calculation and auto-refuel
+You are building a complete mining automation system. The architecture uses:
+- miner/core.lua: Shared config (core.config), stats (core.stats), utilities
+- miner/home.lua: Home navigation, chest deposits, resource restocking
+- miner/tunnel.lua: Tunnel step functions, ore checking, digging helpers
+- miner/patterns.lua: High-level mining patterns (perimeter, branches)
 
 Requirements for mining scripts:
-1. Track position from start point
-2. Return home when inventory 80% full
-3. Discard cobblestone, dirt, gravel
-4. Mine ore veins when detected
-5. Place torches for mob prevention
-6. Handle fuel depletion gracefully
+1. Track position from start point (via common/movement.lua)
+2. Return home when inventory 80% full or low fuel
+3. Discard junk items (configured in config/junk.cfg)
+4. Mine ore veins when detected (configured in config/ores.cfg)
+5. Place torches for mob prevention (mandatory)
+6. Handle fuel depletion gracefully (idle at home if empty)
 7. Report statistics on completion
 ```
 
@@ -352,8 +379,16 @@ Edit `tomfoolery/installer.lua` and add new files to the `files` table:
 
 ```lua
 local files = {
-    -- Add new files here
+    -- Common libraries
     { path = "common/newmodule.lua", required = true },
+
+    -- Miner modules (smart_miner dependencies)
+    { path = "miner/core.lua", required = true },
+    { path = "miner/home.lua", required = true },
+    { path = "miner/tunnel.lua", required = true },
+    { path = "miner/patterns.lua", required = true },
+
+    -- Task scripts
     { path = "farming/crop_harvester.lua", required = true },
 }
 ```
@@ -363,6 +398,7 @@ Also add any new directories to the `directories` table:
 ```lua
 local directories = {
     "common",
+    "miner",    -- Smart miner modules
     "config",
     "mining",
     "farming",  -- Add new directories here
@@ -374,9 +410,10 @@ local directories = {
 1. Create the script in the appropriate folder
 2. Add the file path to `installer.lua` files table
 3. Add any new directories to `installer.lua` directories table
-4. Test the script locally (see `docs/testing.md`)
-5. Push changes to GitHub
-6. Test the installer downloads the new file
+4. Update `agents.md` if adding new agent patterns
+5. Test the script locally (see `docs/testing.md`)
+6. Push changes to GitHub
+7. Test the installer downloads the new file
 
 ## Skill Reference
 

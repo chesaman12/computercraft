@@ -34,6 +34,12 @@ local files = {
     { path = "common/config.lua",    required = true },
     { path = "common/turtle_actions.lua", required = false },
     
+    -- Miner modules (smart_miner dependencies)
+    { path = "miner/core.lua",       required = true },
+    { path = "miner/home.lua",       required = true },
+    { path = "miner/tunnel.lua",     required = true },
+    { path = "miner/patterns.lua",   required = true },
+    
     -- Configuration files
     { path = "config/ores.cfg",      required = true },
     { path = "config/junk.cfg",      required = true },
@@ -45,6 +51,7 @@ local files = {
 -- Directories to create
 local directories = {
     "common",
+    "miner",
     "config", 
     "mining",
 }
