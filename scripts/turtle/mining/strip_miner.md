@@ -42,6 +42,7 @@ Every successful `turtle.forward()` increments the corresponding axis. Vertical 
 - `gap`: Rock gap between corridors.
 - `mineRight`: Expand to the right (+X) or left (-X).
 - `showLogs`: Log output vs live status screen.
+- `useDefaults`: Use default sizing and settings (30 length, 10 corridors).
 - `enableTorches` + `torchInterval`: Place torches every N blocks.
 - `fuelReserve`: Minimum fuel buffer above distance home.
 - `invThreshold`: Return when empty slots are at or below this number.

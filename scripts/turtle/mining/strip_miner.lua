@@ -23,6 +23,16 @@ local DEFAULT_TORCH_INTERVAL = 8
 local DEFAULT_FUEL_RESERVE = 200
 local DEFAULT_INV_THRESHOLD = 1
 local DEFAULT_POKEHOLE_INTERVAL = 4
+local DEFAULT_CORRIDOR_LENGTH = 30
+local DEFAULT_CORRIDOR_COUNT = 10
+local DEFAULT_GAP = 3
+local DEFAULT_MINE_RIGHT = true
+local DEFAULT_SHOW_LOGS = true
+local DEFAULT_ENABLE_TORCHES = true
+local DEFAULT_ENABLE_ORE_MINING = true
+local DEFAULT_ENABLE_POKEHOLES = true
+local DEFAULT_RETURN_HOME = true
+local DEFAULT_FULL_MODE = 1
 local SINGLE_CHEST_CAPACITY = 27
 local RESTOCK_FUEL_BUFFER = 10
 
@@ -133,6 +143,90 @@ local function renderStatus()
     print(string.format("Moves: %d  Turns: %d", moveCount, turnCount))
     print(string.format("Empty slots: %d  Torches: %d", countEmptySlots(), getTorchCount()))
     print(string.format("Elapsed: %ds", elapsedSec))
+end
+
+local function applyDefaults()
+    return {
+        corridorLength = DEFAULT_CORRIDOR_LENGTH,
+        corridorCount = DEFAULT_CORRIDOR_COUNT,
+        gap = DEFAULT_GAP,
+        mineRight = DEFAULT_MINE_RIGHT,
+        showLogs = DEFAULT_SHOW_LOGS,
+        enableTorches = DEFAULT_ENABLE_TORCHES,
+        torchInterval = DEFAULT_TORCH_INTERVAL,
+        fuelReserve = DEFAULT_FUEL_RESERVE,
+        invThreshold = DEFAULT_INV_THRESHOLD,
+        enableOreMining = DEFAULT_ENABLE_ORE_MINING,
+        enablePokeholes = DEFAULT_ENABLE_POKEHOLES,
+        pokeholeInterval = DEFAULT_POKEHOLE_INTERVAL,
+        returnHome = DEFAULT_RETURN_HOME,
+        fullMode = DEFAULT_FULL_MODE,
+    }
+end
+
+local function promptConfig()
+    local config = applyDefaults()
+    local useDefaults = input.readYesNo("Use defaults? (y/n): ", true)
+    if useDefaults then
+        return config
+    end
+
+    config.corridorLength = input.readNumber("Corridor length: ", config.corridorLength)
+    print("Tip: odd corridor counts return home faster; even counts end farther away.")
+    config.corridorCount = input.readNumber("Corridor count: ", config.corridorCount)
+    config.gap = input.readNumber("Gap between corridors: ", config.gap)
+    config.mineRight = input.readYesNo("Mine right? (y/n): ", config.mineRight)
+    config.showLogs = input.readYesNo("Show log output? (y/n): ", config.showLogs)
+    config.enableTorches = input.readYesNo("Enable torches? (y/n): ", config.enableTorches)
+    if config.enableTorches then
+        config.torchInterval = input.readNumber("Torch interval: ", config.torchInterval)
+    else
+        config.torchInterval = 0
+    end
+    config.fuelReserve = input.readNumber("Fuel reserve: ", config.fuelReserve)
+    config.invThreshold = input.readNumber("Return at empty slots: ", config.invThreshold)
+    config.enableOreMining = input.readYesNo("Enable ore mining? (y/n): ", config.enableOreMining)
+    config.enablePokeholes = input.readYesNo("Enable pokeholes? (y/n): ", config.enablePokeholes)
+    if config.enablePokeholes then
+        config.pokeholeInterval = input.readNumber("Pokehole interval: ", config.pokeholeInterval)
+    else
+        config.pokeholeInterval = 0
+    end
+    config.returnHome = input.readYesNo("Return to start when done? (y/n): ", config.returnHome)
+    config.fullMode = input.readChoice(
+        "On full inventory: 1) pause, 2) chest + resume, 3) drop junk: ",
+        1, 3, config.fullMode
+    )
+    return config
+end
+
+local function applyConfig(config)
+    enableTorches = config.enableTorches
+    torchInterval = config.torchInterval
+    fuelReserve = config.fuelReserve
+    invThreshold = config.invThreshold
+    enableOreMining = config.enableOreMining
+    enablePokeholes = config.enablePokeholes
+    pokeholeInterval = config.pokeholeInterval
+    showLogs = config.showLogs
+    returnHomeEnabled = config.returnHome
+end
+
+local function printStartupSummary(config)
+    local torchLine = config.enableTorches and ("torches=" .. tostring(config.torchInterval)) or "torches=off"
+    local oreLine = config.enableOreMining and "ores=on" or "ores=off"
+    local pokeLine = config.enablePokeholes and ("poke=" .. tostring(config.pokeholeInterval)) or "poke=off"
+    local modeLine = "fullMode=" .. tostring(config.fullMode)
+    print("=== Strip Miner ===")
+    print(string.format("Size: %dx%d gap=%d", config.corridorLength, config.corridorCount, config.gap))
+    print(string.format("Dir: %s  logs=%s", config.mineRight and "right" or "left", tostring(config.showLogs)))
+    print(string.format("Fuel reserve: %d  empty slots: %d", config.fuelReserve, config.invThreshold))
+    print(string.format("%s  %s", torchLine, oreLine))
+    print(string.format("%s  %s", pokeLine, modeLine))
+end
+
+local function logReturnDecision(reason)
+    logger.info("Return home: %s", reason)
 end
 
 local function showProgress()
@@ -446,15 +540,19 @@ local function restockTorches()
     return getTorchCount() > 0
 end
 
-local function waitForResource(resource, checkFn, restockFn)
+local function waitForResource(resource, checkFn, restockFn, reason)
     while not checkFn() do
         print("")
         print("========================================")
         print("  IDLE: Waiting for " .. resource)
         print("========================================")
         print("")
+        if reason then
+            print(reason)
+        end
         print("Add more to the chest and press Enter.")
         read()
+        logger.info("Waiting for %s at chest", resource)
         restockFn()
     end
 end
@@ -483,7 +581,7 @@ local function returnToChestAndBack()
             return turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= minFuel
         end, function()
             refuelFromChest(minFuel)
-        end)
+        end, "Returned home: fuel low for safe resume.")
     end
 
     if enableTorches and getTorchCount() == 0 then
@@ -491,7 +589,7 @@ local function returnToChestAndBack()
         if getTorchCount() == 0 then
             waitForResource("torches", function()
                 return getTorchCount() > 0
-            end, restockTorches)
+            end, restockTorches, "Returned home: torches needed to continue.")
         end
     end
 
@@ -516,6 +614,7 @@ local function ensureInventorySpace(fullMode)
     if fullMode == 2 then
         if returnHomeEnabled and canReturnHome then
             logger.info("Inventory low (%d empty), returning to chest", countEmptySlots())
+            logReturnDecision("inventory low")
             return returnToChestAndBack()
         end
         logger.warn("Inventory low but return-home disabled or unsafe; pausing for user")
@@ -545,6 +644,7 @@ local function checkFuelPeriodic()
         logger.warn("Fuel low (%d), returning home from x=%d y=%d z=%d", fuelLevel, posX, posY, posZ)
         print("\nFuel low. Returning home.")
         if returnHomeEnabled and canReturnHome then
+            logReturnDecision("fuel low")
             return returnToChestAndBack()
         end
         print("Out of fuel. Refuel and restart.")
@@ -619,8 +719,10 @@ end
 --- Recursively mine connected ore blocks.
 -- @param visited table Table of "x:y:z" keys to avoid revisiting nodes.
 local function mineVein(visited)
+    logger.debug("Ore scan at x=%d y=%d z=%d", posX, posY, posZ)
     visited[makeKey(posX, posY, posZ)] = true
 
+    -- Check each direction for ore, step into it, recurse, then return.
     -- Up
     if not visited[makeKey(posX, posY + 1, posZ)] then
         local ok, data = turtle.inspectUp()
@@ -706,9 +808,12 @@ local function placeTorchIfNeeded()
     if getTorchCount() == 0 then
         logger.warn("Out of torches at x=%d y=%d z=%d", posX, posY, posZ)
         if returnHomeEnabled and canReturnHome then
+            logReturnDecision("out of torches")
             return returnToChestAndBack()
         end
-        logger.warn("Torches empty and return-home disabled or unsafe; continuing without torches")
+        logger.warn("Torches empty and return-home disabled or unsafe; pausing for user")
+        print("\nOut of torches. Return-home disabled. Add torches and press enter.")
+        read()
         return true
     end
 
@@ -814,16 +919,14 @@ end
 
 local function main()
     print("Strip Miner (symmetric grid)")
-    
-    local corridorLength = input.readNumber("Corridor length: ")
-    print("Tip: odd corridor counts return home faster; even counts end farther away.")
-    local corridorCount = input.readNumber("Number of corridors: ")
-    
+
+    local config = promptConfig()
+
     -- Efficiency tip based on corridor count
-    if corridorCount >= 2 then
-        local interiorCount = corridorCount - 2
-        local walkBackMoves = math.max(0, interiorCount - 1) * corridorLength
-        if corridorCount % 2 == 1 then
+    if config.corridorCount >= 2 then
+        local interiorCount = config.corridorCount - 2
+        local walkBackMoves = math.max(0, interiorCount - 1) * config.corridorLength
+        if config.corridorCount % 2 == 1 then
             print("  (Odd count = shorter return home)")
         else
             print("  (Even count = ends farther from start)")
@@ -832,61 +935,39 @@ local function main()
             print(string.format("  (~%d repositioning moves)", walkBackMoves))
         end
     end
-    
-    local gap = input.readNumber("Rock gap between corridors (default 3): ", 3)
-    local mineRight = input.readYesNo("Mine to the right? (y/n, default y): ", true)
-    showLogs = input.readYesNo("Show log output? (y/n, default y): ", true)
-    enableTorches = input.readYesNo("Enable torches? (y/n, default y): ", true)
-    if enableTorches then
-        torchInterval = input.readNumber("Torch interval (default 8): ", DEFAULT_TORCH_INTERVAL)
-    else
-        torchInterval = 0
-    end
-    fuelReserve = input.readNumber("Fuel reserve (default 200): ", DEFAULT_FUEL_RESERVE)
-    invThreshold = input.readNumber("Return at empty slots (default 1): ", DEFAULT_INV_THRESHOLD)
-    enableOreMining = input.readYesNo("Enable ore vein mining? (y/n, default y): ", true)
-    enablePokeholes = input.readYesNo("Enable pokeholes? (y/n, default y): ", true)
-    if enablePokeholes then
-        pokeholeInterval = input.readNumber("Pokehole interval (default 4): ", DEFAULT_POKEHOLE_INTERVAL)
-    else
-        pokeholeInterval = 0
-    end
-    local returnHome = input.readYesNo("Return to start when done? (y/n, default y): ", true)
-    local fullMode = input.readChoice(
-        "On full inventory: 1) pause, 2) chest + resume, 3) drop junk only: ",
-        1, 3, 1
-    )
 
-    logger.setEcho(showLogs)
-    returnHomeEnabled = returnHome
+    applyConfig(config)
+    printStartupSummary(config)
+
+    logger.setEcho(config.showLogs)
 
     logger.logParams("strip_miner", {
-        corridorLength = corridorLength,
-        corridorCount = corridorCount,
-        gap = gap,
-        mineRight = mineRight,
-        showLogs = showLogs,
-        enableTorches = enableTorches,
-        torchInterval = torchInterval,
-        fuelReserve = fuelReserve,
-        invThreshold = invThreshold,
-        enableOreMining = enableOreMining,
-        enablePokeholes = enablePokeholes,
-        pokeholeInterval = pokeholeInterval,
-        returnHome = returnHome,
-        fullMode = fullMode,
+        corridorLength = config.corridorLength,
+        corridorCount = config.corridorCount,
+        gap = config.gap,
+        mineRight = config.mineRight,
+        showLogs = config.showLogs,
+        enableTorches = config.enableTorches,
+        torchInterval = config.torchInterval,
+        fuelReserve = config.fuelReserve,
+        invThreshold = config.invThreshold,
+        enableOreMining = config.enableOreMining,
+        enablePokeholes = config.enablePokeholes,
+        pokeholeInterval = config.pokeholeInterval,
+        returnHome = config.returnHome,
+        fullMode = config.fullMode,
     })
 
-    local shift = gap + 1
-    local maxX = (corridorCount - 1) * shift
+    local shift = config.gap + 1
+    local maxX = (config.corridorCount - 1) * shift
     -- Perimeter: 2 bars (maxX each) + 2 outer corridors (corridorLength each)
     -- Interior: (corridorCount - 2) corridors of corridorLength each
-    local perimeterMoves = (maxX * 2) + (corridorLength * 2)
-    local interiorMoves = (corridorCount - 2) * corridorLength
+    local perimeterMoves = (maxX * 2) + (config.corridorLength * 2)
+    local interiorMoves = (config.corridorCount - 2) * config.corridorLength
     local totalMiningMoves = perimeterMoves + interiorMoves
     -- Return path: walk back through existing tunnels
-    local estimatedReturn = returnHome and (maxX + corridorLength) or 0
-    local estimatedMoves = totalMiningMoves + estimatedReturn + fuelReserve
+    local estimatedReturn = config.returnHome and (maxX + config.corridorLength) or 0
+    local estimatedMoves = totalMiningMoves + estimatedReturn + config.fuelReserve
 
     totalSteps = totalMiningMoves
     currentStep = 0
@@ -898,26 +979,27 @@ local function main()
         return
     end
 
-    logger.info("Starting strip mine: length=%d corridors=%d gap=%d right=%s", corridorLength, corridorCount, gap, tostring(mineRight))
-    if showLogs then
+    logger.info("Starting strip mine: length=%d corridors=%d gap=%d right=%s", config.corridorLength, config.corridorCount, config.gap, tostring(config.mineRight))
+    if config.showLogs then
         print("Mining " .. totalSteps .. " blocks...")
     else
         renderStatus()
     end
 
     local aborted = false
-    if not mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, mineRight) then
+    if not mineSymmetricGrid(config.corridorLength, config.corridorCount, config.gap, config.fullMode, config.mineRight) then
         aborted = true
     end
 
     print("")
-    if returnHome and canReturnHome then
+    if config.returnHome and canReturnHome then
         logger.info("Returning home from x=%d y=%d z=%d", posX, posY, posZ)
         print("Returning home...")
+        logReturnDecision("end of run")
         goTo(0, 0, 0, 0)
         -- Final dump after returning home to clear any remaining ore (fuel/torch slots preserved).
         dumpToChestBehindStart()
-    elseif returnHome then
+    elseif config.returnHome then
         logger.warn("Skipping return home because turtle is not at ground level")
         print("Skipping return home (turtle not at ground level).")
     end
