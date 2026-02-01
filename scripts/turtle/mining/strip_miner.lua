@@ -15,8 +15,14 @@ local fuel = require("common.fuel")
 local inventory = require("common.inventory")
 local logger = require("common.logger")
 
-local FUEL_SLOT = 16
+local FUEL_SLOT = 15
+local TORCH_SLOT = 16
 local MAX_DIG_ATTEMPTS = 10
+
+local DEFAULT_TORCH_INTERVAL = 8
+local DEFAULT_FUEL_RESERVE = 200
+local DEFAULT_INV_THRESHOLD = 1
+local DEFAULT_POKEHOLE_INTERVAL = 4
 
 -- Default junk list
 local defaultJunkList = table.concat({
@@ -47,9 +53,29 @@ local defaultJunkList = table.concat({
 
 local junkItems = inventory.loadJunkList("junklist.txt", defaultJunkList)
 
+local oreList = {
+    ["minecraft:coal_ore"] = true,
+    ["minecraft:deepslate_coal_ore"] = true,
+    ["minecraft:copper_ore"] = true,
+    ["minecraft:deepslate_copper_ore"] = true,
+    ["minecraft:iron_ore"] = true,
+    ["minecraft:deepslate_iron_ore"] = true,
+    ["minecraft:gold_ore"] = true,
+    ["minecraft:deepslate_gold_ore"] = true,
+    ["minecraft:redstone_ore"] = true,
+    ["minecraft:deepslate_redstone_ore"] = true,
+    ["minecraft:lapis_ore"] = true,
+    ["minecraft:deepslate_lapis_ore"] = true,
+    ["minecraft:diamond_ore"] = true,
+    ["minecraft:deepslate_diamond_ore"] = true,
+    ["minecraft:emerald_ore"] = true,
+    ["minecraft:deepslate_emerald_ore"] = true,
+}
+
 -- Position tracking
 local posX = 0
 local posZ = 0
+local posY = 0
 local dir = 0
 
 local totalSteps = 0
@@ -62,6 +88,26 @@ local startTime = 0
 local startFuel = 0
 local canReturnHome = true
 local showLogs = true
+local torchInterval = DEFAULT_TORCH_INTERVAL
+local fuelReserve = DEFAULT_FUEL_RESERVE
+local invThreshold = DEFAULT_INV_THRESHOLD
+local pokeholeInterval = DEFAULT_POKEHOLE_INTERVAL
+local enableTorches = true
+local enableOreMining = true
+local enablePokeholes = true
+local returnHomeEnabled = true
+
+local function countEmptySlots()
+    return inventory.countEmptySlots()
+end
+
+local function getTorchCount()
+    local detail = turtle.getItemDetail(TORCH_SLOT)
+    if detail and detail.name:match("torch") then
+        return detail.count
+    end
+    return 0
+end
 
 local function renderStatus()
     local pct = totalSteps > 0 and math.floor((currentStep / totalSteps) * 100) or 0
@@ -72,13 +118,14 @@ local function renderStatus()
     term.setCursorPos(1, 1)
     print("=== Strip Miner Status ===")
     print(string.format("Progress: %d/%d (%d%%)", currentStep, totalSteps, pct))
-    print(string.format("Position: x=%d z=%d dir=%d", posX, posZ, dir))
+    print(string.format("Position: x=%d y=%d z=%d dir=%d", posX, posY, posZ, dir))
     if fuelLevel == "unlimited" then
         print("Fuel: Unlimited")
     else
         print(string.format("Fuel: %d", fuelLevel))
     end
     print(string.format("Moves: %d  Turns: %d", moveCount, turnCount))
+    print(string.format("Empty slots: %d  Torches: %d", countEmptySlots(), getTorchCount()))
     print(string.format("Elapsed: %ds", elapsedSec))
 end
 
@@ -149,9 +196,11 @@ local function moveUpSafe()
         if attempts > MAX_DIG_ATTEMPTS then
             logger.error("Cannot move up at x=%d z=%d", posX, posZ)
             print("\nCannot move up.")
+            canReturnHome = false
             return false
         end
     end
+    posY = posY + 1
     moveCount = moveCount + 1
     return true
 end
@@ -169,60 +218,16 @@ local function moveDownSafe()
         if attempts > MAX_DIG_ATTEMPTS then
             logger.error("Cannot move down at x=%d z=%d", posX, posZ)
             print("\nCannot move down.")
+            canReturnHome = false
             return false
         end
     end
+    posY = posY - 1
     moveCount = moveCount + 1
     return true
 end
 
-local function clearCeiling2()
-    local attempts = 0
-    while turtle.detectUp() do
-        turtle.digUp()
-        turtle.suckUp()
-        sleep(0.2)
-        attempts = attempts + 1
-        if attempts > MAX_DIG_ATTEMPTS then
-            logger.error("Stuck on unbreakable block above at x=%d z=%d", posX, posZ)
-            print("\nStuck on unbreakable block above.")
-            return false
-        end
-    end
-
-    if not moveUpSafe() then
-        return false
-    end
-
-    attempts = 0
-    while turtle.detectUp() do
-        turtle.digUp()
-        turtle.suckUp()
-        sleep(0.2)
-        attempts = attempts + 1
-        if attempts > MAX_DIG_ATTEMPTS then
-            logger.error("Stuck on unbreakable block above (level 2) at x=%d z=%d", posX, posZ)
-            print("\nStuck on unbreakable block above.")
-            if not moveDownSafe() then
-                logger.error("Cannot return to ground at x=%d z=%d", posX, posZ)
-                print("\nCannot return to ground.")
-                canReturnHome = false
-            end
-            return false
-        end
-    end
-
-    if not moveDownSafe() then
-        logger.error("Cannot return to ground at x=%d z=%d", posX, posZ)
-        print("\nCannot return to ground.")
-        canReturnHome = false
-        return false
-    end
-
-    return true
-end
-
-local function moveForward1x3()
+local function moveForward1x2()
     local attempts = 0
     while turtle.detect() do
         logger.debug("Digging ahead at x=%d z=%d", posX, posZ)
@@ -233,6 +238,20 @@ local function moveForward1x3()
         if attempts > MAX_DIG_ATTEMPTS then
             logger.error("Stuck on unbreakable block ahead at x=%d z=%d", posX, posZ)
             print("\nStuck on unbreakable block ahead.")
+            return false
+        end
+    end
+
+    attempts = 0
+    while turtle.detectUp() do
+        logger.debug("Digging up at x=%d z=%d", posX, posZ)
+        turtle.digUp()
+        turtle.suckUp()
+        sleep(0.2)
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            logger.error("Stuck on unbreakable block above at x=%d z=%d", posX, posZ)
+            print("\nStuck on unbreakable block above.")
             return false
         end
     end
@@ -257,7 +276,7 @@ local function moveForward1x3()
     updatePosition()
     moveCount = moveCount + 1
     logger.debug("Moved forward to x=%d z=%d", posX, posZ)
-    return clearCeiling2()
+    return true
 end
 
 local function moveForwardSafe()
@@ -283,8 +302,17 @@ local function moveForwardSafe()
     return true
 end
 
-local function goTo(x, z, targetDir)
-    logger.debug("goTo: from x=%d z=%d to x=%d z=%d", posX, posZ, x, z)
+local function goTo(x, y, z, targetDir)
+    logger.debug("goTo: from x=%d y=%d z=%d to x=%d y=%d z=%d", posX, posY, posZ, x, y, z)
+    if posY < y then
+        for i = 1, (y - posY) do
+            if not moveUpSafe() then return false end
+        end
+    elseif posY > y then
+        for i = 1, (posY - y) do
+            if not moveDownSafe() then return false end
+        end
+    end
     if posZ < z then
         turnTo(0)
         for i = 1, (z - posZ) do
@@ -312,12 +340,21 @@ local function goTo(x, z, targetDir)
     if targetDir ~= nil then
         turnTo(targetDir)
     end
-    logger.debug("goTo: arrived at x=%d z=%d", posX, posZ)
+    logger.debug("goTo: arrived at x=%d y=%d z=%d", posX, posY, posZ)
     return true
 end
 
 local function dropJunk()
-    inventory.dropJunk(junkItems, FUEL_SLOT)
+    for slot = 1, 16 do
+        if slot ~= FUEL_SLOT and slot ~= TORCH_SLOT then
+            local detail = turtle.getItemDetail(slot)
+            if detail and junkItems[detail.name] then
+                turtle.select(slot)
+                turtle.drop()
+            end
+        end
+    end
+    turtle.select(1)
 end
 
 local function dumpToChestBehindStart()
@@ -326,42 +363,154 @@ local function dumpToChestBehindStart()
         print("\nNo chest behind start. Place one and press enter.")
         read()
     end
-    inventory.dumpToChest(FUEL_SLOT)
+    for slot = 1, 16 do
+        if slot ~= FUEL_SLOT and slot ~= TORCH_SLOT then
+            turtle.select(slot)
+            turtle.drop()
+        end
+    end
+    turtle.select(1)
     turnAround()
+end
+
+local function tryRefuel(minFuel)
+    if turtle.getFuelLevel() == "unlimited" then
+        return true
+    end
+    for slot = 1, 16 do
+        if slot ~= TORCH_SLOT and turtle.getItemCount(slot) > 0 then
+            turtle.select(slot)
+            if turtle.refuel(0) then
+                turtle.refuel()
+            end
+        end
+        if turtle.getFuelLevel() >= minFuel then
+            turtle.select(1)
+            return true
+        end
+    end
+    turtle.select(1)
+    return turtle.getFuelLevel() >= minFuel
+end
+
+local function refuelFromChest(minFuel)
+    if turtle.getFuelLevel() == "unlimited" then
+        return true
+    end
+    local attempts = 0
+    while turtle.getFuelLevel() < minFuel and attempts < 27 do
+        attempts = attempts + 1
+        local emptySlot = nil
+        for slot = 1, 16 do
+            if slot ~= TORCH_SLOT and turtle.getItemCount(slot) == 0 then
+                emptySlot = slot
+                break
+            end
+        end
+        if not emptySlot then
+            break
+        end
+        turtle.select(emptySlot)
+        if turtle.suck(64) then
+            if turtle.refuel(0) then
+                turtle.refuel()
+            else
+                turtle.drop()
+            end
+        else
+            break
+        end
+    end
+    turtle.select(1)
+    return turtle.getFuelLevel() >= minFuel
+end
+
+local function restockTorches()
+    if not enableTorches then
+        return true
+    end
+    turtle.select(TORCH_SLOT)
+    turtle.suck(64)
+    turtle.select(1)
+    return getTorchCount() > 0
+end
+
+local function waitForResource(resource, checkFn, restockFn)
+    while not checkFn() do
+        print("")
+        print("========================================")
+        print("  IDLE: Waiting for " .. resource)
+        print("========================================")
+        print("")
+        print("Add more to the chest and press Enter.")
+        read()
+        restockFn()
+    end
 end
 
 local function returnToChestAndBack()
     local targetX = posX
+    local targetY = posY
     local targetZ = posZ
     local targetDir = dir
-    local distanceHome = math.abs(posX) + math.abs(posZ)
+    local distanceHome = math.abs(posX) + math.abs(posY) + math.abs(posZ)
 
-    logger.debug("Returning to chest from x=%d z=%d (distance=%d)", posX, posZ, distanceHome)
+    logger.debug("Returning to chest from x=%d y=%d z=%d (distance=%d)", posX, posY, posZ, distanceHome)
     if not fuel.ensureFuel(distanceHome * 2 + 10) then
         return false
     end
 
-    goTo(0, 0, 0)
+    goTo(0, 0, 0, 0)
     dumpToChestBehindStart()
-    logger.debug("Dumped inventory, returning to x=%d z=%d", targetX, targetZ)
-    goTo(targetX, targetZ, targetDir)
+    logger.debug("Dumped inventory, restocking")
+
+    local minFuel = fuelReserve + math.abs(targetX) + math.abs(targetY) + math.abs(targetZ) + 10
+    tryRefuel(minFuel)
+    refuelFromChest(minFuel)
+    if turtle.getFuelLevel() ~= "unlimited" and turtle.getFuelLevel() < minFuel then
+        waitForResource("fuel", function()
+            return turtle.getFuelLevel() == "unlimited" or turtle.getFuelLevel() >= minFuel
+        end, function()
+            refuelFromChest(minFuel)
+        end)
+    end
+
+    if enableTorches and getTorchCount() == 0 then
+        restockTorches()
+        if getTorchCount() == 0 then
+            waitForResource("torches", function()
+                return getTorchCount() > 0
+            end, restockTorches)
+        end
+    end
+
+    logger.info("Restocked: fuel=%s torches=%d", tostring(turtle.getFuelLevel()), getTorchCount())
+
+    logger.debug("Returning to x=%d y=%d z=%d", targetX, targetY, targetZ)
+    goTo(targetX, targetY, targetZ, targetDir)
     return true
 end
 
 local function ensureInventorySpace(fullMode)
-    if not inventory.isFull() then
+    if countEmptySlots() > invThreshold then
         return true
     end
 
-    logger.debug("Inventory full at x=%d z=%d, dropping junk", posX, posZ)
+    logger.debug("Inventory low (%d empty) at x=%d z=%d, dropping junk", countEmptySlots(), posX, posZ)
     dropJunk()
-    if not inventory.isFull() then
+    if countEmptySlots() > invThreshold then
         return true
     end
 
     if fullMode == 2 then
-        logger.info("Inventory full, returning to chest")
-        return returnToChestAndBack()
+        if returnHomeEnabled and canReturnHome then
+            logger.info("Inventory low (%d empty), returning to chest", countEmptySlots())
+            return returnToChestAndBack()
+        end
+        logger.warn("Inventory low but return-home disabled or unsafe; pausing for user")
+        print("\nInventory low and cannot return home. Remove items and press enter.")
+        read()
+        return true
     elseif fullMode == 3 then
         return true
     end
@@ -377,22 +526,236 @@ local function checkFuelPeriodic()
     if fuelLevel == "unlimited" then
         return true
     end
-    local distanceHome = math.abs(posX) + math.abs(posZ)
-    if fuelLevel < distanceHome + 20 then
-        logger.warn("Fuel low (%d), returning home from x=%d z=%d", fuelLevel, posX, posZ)
+    local distanceHome = math.abs(posX) + math.abs(posY) + math.abs(posZ)
+    local minFuel = distanceHome + fuelReserve
+    if fuelLevel < minFuel then
+        if tryRefuel(minFuel) then
+            return true
+        end
+        logger.warn("Fuel low (%d), returning home from x=%d y=%d z=%d", fuelLevel, posX, posY, posZ)
         print("\nFuel low. Returning home.")
-        goTo(0, 0, 0)
+        if returnHomeEnabled and canReturnHome then
+            return returnToChestAndBack()
+        end
         print("Out of fuel. Refuel and restart.")
         return false
     end
     return true
 end
 
+local function isOre(name)
+    return oreList[name] == true
+end
+
+local function getForwardDelta()
+    if dir == 0 then
+        return 0, 1
+    elseif dir == 1 then
+        return 1, 0
+    elseif dir == 2 then
+        return 0, -1
+    end
+    return -1, 0
+end
+
+local function moveForwardRaw()
+    local attempts = 0
+    while not turtle.forward() do
+        if turtle.detect() then
+            turtle.dig()
+        else
+            sleep(0.2)
+        end
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            return false
+        end
+    end
+    updatePosition()
+    moveCount = moveCount + 1
+    return true
+end
+
+local function moveBackSafe()
+    turnAround()
+    local ok = moveForwardSafe()
+    turnAround()
+    return ok
+end
+
+local function mineVein(visited)
+    local key = posX .. ":" .. posY .. ":" .. posZ
+    visited[key] = true
+
+    -- Up
+    local upKey = posX .. ":" .. (posY + 1) .. ":" .. posZ
+    if not visited[upKey] then
+        local ok, data = turtle.inspectUp()
+        if ok and isOre(data.name) then
+            logger.debug("Ore up: %s", data.name)
+            turtle.digUp()
+            if moveUpSafe() then
+                mineVein(visited)
+                moveDownSafe()
+            end
+        end
+    end
+
+    -- Down
+    local downKey = posX .. ":" .. (posY - 1) .. ":" .. posZ
+    if not visited[downKey] then
+        local ok, data = turtle.inspectDown()
+        if ok and isOre(data.name) then
+            logger.debug("Ore down: %s", data.name)
+            turtle.digDown()
+            if moveDownSafe() then
+                mineVein(visited)
+                moveUpSafe()
+            end
+        end
+    end
+
+    -- Forward
+    do
+        local dx, dz = getForwardDelta()
+        local fKey = (posX + dx) .. ":" .. posY .. ":" .. (posZ + dz)
+        if not visited[fKey] then
+            local ok, data = turtle.inspect()
+            if ok and isOre(data.name) then
+                logger.debug("Ore forward: %s", data.name)
+                turtle.dig()
+                if moveForwardRaw() then
+                    mineVein(visited)
+                    moveBackSafe()
+                end
+            end
+        end
+    end
+
+    -- Left
+    turnLeft()
+    do
+        local dx, dz = getForwardDelta()
+        local lKey = (posX + dx) .. ":" .. posY .. ":" .. (posZ + dz)
+        if not visited[lKey] then
+            local ok, data = turtle.inspect()
+            if ok and isOre(data.name) then
+                logger.debug("Ore left: %s", data.name)
+                turtle.dig()
+                if moveForwardRaw() then
+                    mineVein(visited)
+                    moveBackSafe()
+                end
+            end
+        end
+    end
+    turnRight()
+
+    -- Right
+    turnRight()
+    do
+        local dx, dz = getForwardDelta()
+        local rKey = (posX + dx) .. ":" .. posY .. ":" .. (posZ + dz)
+        if not visited[rKey] then
+            local ok, data = turtle.inspect()
+            if ok and isOre(data.name) then
+                logger.debug("Ore right: %s", data.name)
+                turtle.dig()
+                if moveForwardRaw() then
+                    mineVein(visited)
+                    moveBackSafe()
+                end
+            end
+        end
+    end
+    turnLeft()
+
+    -- Back
+    turnAround()
+    do
+        local dx, dz = getForwardDelta()
+        local bKey = (posX + dx) .. ":" .. posY .. ":" .. (posZ + dz)
+        if not visited[bKey] then
+            local ok, data = turtle.inspect()
+            if ok and isOre(data.name) then
+                logger.debug("Ore back: %s", data.name)
+                turtle.dig()
+                if moveForwardRaw() then
+                    mineVein(visited)
+                    moveBackSafe()
+                end
+            end
+        end
+    end
+    turnAround()
+end
+
+local function checkAndMineAdjacent()
+    if not enableOreMining then
+        return
+    end
+    mineVein({})
+end
+
+local function pokeholeSide(turnIn, turnOut)
+    turnIn()
+    if turtle.detect() then
+        turtle.dig()
+    end
+    if moveForwardSafe() then
+        checkAndMineAdjacent()
+        moveBackSafe()
+    end
+    turnOut()
+end
+
+local function maybePokeholes()
+    if not enablePokeholes or pokeholeInterval <= 0 then
+        return
+    end
+    if currentStep % pokeholeInterval ~= 0 then
+        return
+    end
+    logger.debug("Pokeholes at step %d", currentStep)
+    pokeholeSide(turnLeft, turnRight)
+    pokeholeSide(turnRight, turnLeft)
+end
+
+local function placeTorchIfNeeded()
+    if not enableTorches or torchInterval <= 0 then
+        return true
+    end
+    if currentStep % torchInterval ~= 0 then
+        return true
+    end
+    if getTorchCount() == 0 then
+        logger.warn("Out of torches at x=%d y=%d z=%d", posX, posY, posZ)
+        if returnHomeEnabled and canReturnHome then
+            return returnToChestAndBack()
+        end
+        logger.warn("Torches empty and return-home disabled or unsafe; continuing without torches")
+        return true
+    end
+
+    local prev = turtle.getSelectedSlot()
+    turtle.select(TORCH_SLOT)
+    if not turtle.placeDown() then
+        logger.debug("Failed to place torch at x=%d y=%d z=%d", posX, posY, posZ)
+    else
+        logger.debug("Placed torch at x=%d y=%d z=%d", posX, posY, posZ)
+    end
+    turtle.select(prev)
+    return true
+end
+
 local function mineForward(fullMode)
-    if not moveForward1x3() then return false end
-    ensureInventorySpace(fullMode)
+    if not moveForward1x2() then return false end
     currentStep = currentStep + 1
     showProgress()
+    checkAndMineAdjacent()
+    maybePokeholes()
+    if not placeTorchIfNeeded() then return false end
+    ensureInventorySpace(fullMode)
     if not checkFuelPeriodic() then return false end
     return true
 end
@@ -498,6 +861,21 @@ local function main()
     local gap = input.readNumber("Rock gap between corridors (default 3): ", 3)
     local mineRight = input.readYesNo("Mine to the right? (y/n, default y): ", true)
     showLogs = input.readYesNo("Show log output? (y/n, default y): ", true)
+    enableTorches = input.readYesNo("Enable torches? (y/n, default y): ", true)
+    if enableTorches then
+        torchInterval = input.readNumber("Torch interval (default 8): ", DEFAULT_TORCH_INTERVAL)
+    else
+        torchInterval = 0
+    end
+    fuelReserve = input.readNumber("Fuel reserve (default 200): ", DEFAULT_FUEL_RESERVE)
+    invThreshold = input.readNumber("Return at empty slots (default 1): ", DEFAULT_INV_THRESHOLD)
+    enableOreMining = input.readYesNo("Enable ore vein mining? (y/n, default y): ", true)
+    enablePokeholes = input.readYesNo("Enable pokeholes? (y/n, default y): ", true)
+    if enablePokeholes then
+        pokeholeInterval = input.readNumber("Pokehole interval (default 4): ", DEFAULT_POKEHOLE_INTERVAL)
+    else
+        pokeholeInterval = 0
+    end
     local returnHome = input.readYesNo("Return to start when done? (y/n, default y): ", true)
     local fullMode = input.readChoice(
         "On full inventory: 1) pause, 2) chest + resume, 3) drop junk only: ",
@@ -505,6 +883,7 @@ local function main()
     )
 
     logger.setEcho(showLogs)
+    returnHomeEnabled = returnHome
 
     logger.logParams("strip_miner", {
         corridorLength = corridorLength,
@@ -512,6 +891,13 @@ local function main()
         gap = gap,
         mineRight = mineRight,
         showLogs = showLogs,
+        enableTorches = enableTorches,
+        torchInterval = torchInterval,
+        fuelReserve = fuelReserve,
+        invThreshold = invThreshold,
+        enableOreMining = enableOreMining,
+        enablePokeholes = enablePokeholes,
+        pokeholeInterval = pokeholeInterval,
         returnHome = returnHome,
         fullMode = fullMode,
     })
@@ -525,7 +911,7 @@ local function main()
     local totalMiningMoves = perimeterMoves + interiorMoves
     -- Return path: walk back through existing tunnels
     local estimatedReturn = returnHome and (maxX + corridorLength) or 0
-    local estimatedMoves = totalMiningMoves + estimatedReturn
+    local estimatedMoves = totalMiningMoves + estimatedReturn + fuelReserve
 
     totalSteps = totalMiningMoves
     currentStep = 0
@@ -551,9 +937,9 @@ local function main()
 
     print("")
     if returnHome and canReturnHome then
-        logger.info("Returning home from x=%d z=%d", posX, posZ)
+        logger.info("Returning home from x=%d y=%d z=%d", posX, posY, posZ)
         print("Returning home...")
-        goTo(0, 0, 0)
+        goTo(0, 0, 0, 0)
     elseif returnHome then
         logger.warn("Skipping return home because turtle is not at ground level")
         print("Skipping return home (turtle not at ground level).")
