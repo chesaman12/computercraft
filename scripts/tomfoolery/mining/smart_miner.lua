@@ -1,36 +1,37 @@
 --- Smart Mining Turtle Script
--- An optimized branch mining turtle using wiki-recommended techniques for maximum efficiency
+-- An optimized square perimeter mining turtle using wiki-recommended techniques
 --
 -- Features:
+-- - Square perimeter mining: mines a complete square, then fills with parallel branches
 -- - Standard 1x2 tunnels (1 wide, 2 tall) as recommended by Minecraft Wiki
 -- - Efficient human-like mining pattern: checks both floor and ceiling levels
 -- - Pokehole mining: Every 4 blocks, enters pokeholes and checks all 5 directions
+-- - Serpentine branch pattern: alternates east/west for efficient coverage
 -- - Minimal turning: uses left/right checks instead of full 360 scans
 -- - Keeps fuel in inventory for mobile refueling
--- - Branch spacing of 6 blocks for maximum efficiency (or 3 for balance)
 -- - Tracks position and can return home safely
 -- - Manages inventory, discards junk, deposits valuables in chest
 -- - Places torches at regular intervals
 --
--- Mining Pattern per step (mimics efficient human mining):
+-- Mining Pattern:
+--   Phase 1 - Perimeter: Mine east -> north -> west -> south (back to origin)
+--   Phase 2 - Branches: Serpentine pattern inside the square
+--     - Start at southwest corner, mine east
+--     - Move north (spacing blocks), mine west
+--     - Move north (spacing blocks), mine east
+--     - Repeat until square is filled
+--
+-- Each tunnel step (mimics efficient human mining):
 --   1. At floor level: check below, left, right for ore
 --   2. Dig up, move up to head height
 --   3. At head height: check left, right, ceiling for ore
---   4. Move down to floor
---   5. Place torch above (if interval reached)
---   6. If pokehole step: dig left, ENTER pokehole, check 5 directions, return
---   7. If pokehole step: dig right, ENTER pokehole, check 5 directions, return
---   8. Dig forward and advance
+--   4. Move down to floor, place torch (if interval reached)
+--   5. If pokehole step: enter pokeholes left/right, check 5 directions each
+--   6. Dig forward and advance
 --
--- Efficiency (from wiki MATLAB analysis):
--- - Spacing 6: Maximum efficiency, ~1.7% of blocks are diamond
--- - Spacing 3: Good balance of efficiency and thoroughness
--- - Pokeholes with exploration: Maximum ore face exposure
---
--- Usage: smart_miner <length> [branches] [spacing]
---   length:  How far each branch extends (default: 50)
---   branches: Number of branches on each side (default: 5)
---   spacing: Blocks between branches (default: 6 for max efficiency)
+-- Usage: smart_miner <size> [spacing]
+--   size:    Size of the square (blocks per side, default: 50)
+--   spacing: Blocks between internal branches (default: 3)
 --
 -- IMPORTANT: Run from the root installation directory (where common/ is):
 --   mining/smart_miner 50
@@ -80,11 +81,10 @@ local fuel = require("common.fuel")
 
 -- Configuration
 local CONFIG = {
-    -- Mining parameters
-    branchLength = 50,      -- Length of each branch
-    branchCount = 5,        -- Branches per side
-    branchSpacing = 6,      -- Blocks between branches (6 = maximum efficiency per wiki)
-                            -- Use 3 for balance of efficiency and thoroughness
+    -- Square mining parameters
+    -- The turtle mines a square perimeter, then fills it with parallel branches
+    squareSize = 50,        -- Size of the square (blocks per side)
+    branchSpacing = 3,      -- Blocks between internal branches (3 = every 4th block)
     tunnelHeight = 2,       -- Height of tunnel (standard 1x2 as per wiki)
     
     -- Pokehole mining settings (from wiki "Layout 6")
@@ -129,13 +129,10 @@ local stats = {
 --- Parse command line arguments
 local function parseArgs()
     if tArgs[1] then
-        CONFIG.branchLength = tonumber(tArgs[1]) or CONFIG.branchLength
+        CONFIG.squareSize = tonumber(tArgs[1]) or CONFIG.squareSize
     end
     if tArgs[2] then
-        CONFIG.branchCount = tonumber(tArgs[2]) or CONFIG.branchCount
-    end
-    if tArgs[3] then
-        CONFIG.branchSpacing = tonumber(tArgs[3]) or CONFIG.branchSpacing
+        CONFIG.branchSpacing = tonumber(tArgs[2]) or CONFIG.branchSpacing
     end
 end
 
@@ -888,95 +885,167 @@ local function mineBranch(length)
     end
 end
 
---- Mine the main tunnel
-local function mineMainTunnel(length)
-    print("Mining main tunnel...")
-    mineBranch(length)
-end
-
---- Mine all branches in a branch mining pattern
-local function branchMine()
-    local mainTunnelLength = (CONFIG.branchCount * 2) * (CONFIG.branchSpacing + 1) + 1
-    
-    print(string.format("Branch mining pattern:"))
-    print(string.format("  Main tunnel: %d blocks", mainTunnelLength))
-    print(string.format("  Branches: %d per side, %d blocks each", CONFIG.branchCount, CONFIG.branchLength))
-    print(string.format("  Spacing: %d blocks between branches", CONFIG.branchSpacing))
-    print("")
-    sleep(2)
-    
-    local branchNum = 0
-    
-    -- Mine main tunnel and branches
-    for i = 1, CONFIG.branchCount do
-        -- Check safety before starting new branch section
+--- Mine one side of the perimeter
+-- @param length number Length of this side
+local function minePerimeterSide(length)
+    print(string.format("Mining perimeter side: %d blocks", length))
+    for step = 1, length do
+        -- Safety check
         if not hasSafeFuel() then
-            print("Low fuel before branch section, returning home...")
             returnHomeAndDeposit()
         end
         
-        -- Move to next branch position (mine main tunnel section)
-        for step = 1, CONFIG.branchSpacing + 1 do
-            -- Quick safety check each step in main tunnel
-            if not hasSafeFuel() then
-                returnHomeAndDeposit()
-            end
-            -- Main tunnel doesn't need pokeholes (branches cover those areas)
-            mineTunnelStep(true, step == CONFIG.branchSpacing + 1, nil)
+        -- Check inventory
+        if inventory.isFull(2) then
+            print("Inventory full, returning home...")
+            returnHomeAndDeposit()
         end
         
-        -- Mine right branch
-        branchNum = branchNum + 1
-        print(string.format("Mining branch %d (right)...", branchNum))
-        local branchStartPos = movement.getPosition()  -- Remember Y level before branch
-        movement.turnRight()
-        mineBranch(CONFIG.branchLength)
-        
-        -- Return to main tunnel
-        -- Note: We don't check fuel here because:
-        -- 1. mineBranch already ensured we have enough fuel to return
-        -- 2. If we went home mid-branch, depositAndRestock waits for fuel
-        movement.turnAround()
-        print("Returning to main tunnel...")
-        for step = 1, CONFIG.branchLength do
-            movement.forward(true)
-        end
-        -- Ensure we're at the correct Y level (snake mining should end at floor level)
-        local currentPos = movement.getPosition()
-        while currentPos.y > branchStartPos.y do
-            movement.down(false)
-            currentPos = movement.getPosition()
-        end
-        while currentPos.y < branchStartPos.y do
-            movement.up(false)
-            currentPos = movement.getPosition()
+        -- Determine torch placement
+        local placeTorch = CONFIG.placeTorches and (step % CONFIG.torchInterval == 0)
+        if placeTorch and getTorchCount() == 0 then
+            print("Out of torches! Returning home...")
+            returnHomeAndDeposit()
         end
         
-        -- Mine left branch
-        branchNum = branchNum + 1
-        print(string.format("Mining branch %d (left)...", branchNum))
-        -- Already facing back, so turn right to face left branch
-        movement.turnRight()
-        mineBranch(CONFIG.branchLength)
+        -- Mine one step (perimeter doesn't need pokeholes - branches will cover inner area)
+        mineTunnelStep(CONFIG.checkOreVeins, placeTorch, nil)
         
-        -- Return to main tunnel
-        movement.turnAround()
-        print("Returning to main tunnel...")
-        for step = 1, CONFIG.branchLength do
-            movement.forward(true)
+        if step % 10 == 0 then
+            printStatus()
         end
-        -- Ensure we're at the correct Y level
-        currentPos = movement.getPosition()
-        while currentPos.y > branchStartPos.y do
-            movement.down(false)
-            currentPos = movement.getPosition()
-        end
-        while currentPos.y < branchStartPos.y do
-            movement.up(false)
-            currentPos = movement.getPosition()
-        end
-        movement.turnRight()  -- Face forward again
     end
+end
+
+--- Mine the square perimeter (east -> north -> west -> south back to origin)
+local function mineSquarePerimeter()
+    print("=== Mining Square Perimeter ===")
+    print(string.format("Square size: %d x %d", CONFIG.squareSize, CONFIG.squareSize))
+    sleep(1)
+    
+    -- East side (we start facing forward which is "east" in our coordinate system)
+    print("Mining EAST side...")
+    minePerimeterSide(CONFIG.squareSize)
+    
+    -- Turn left to face north
+    movement.turnLeft()
+    
+    -- North side
+    print("Mining NORTH side...")
+    minePerimeterSide(CONFIG.squareSize)
+    
+    -- Turn left to face west
+    movement.turnLeft()
+    
+    -- West side
+    print("Mining WEST side...")
+    minePerimeterSide(CONFIG.squareSize)
+    
+    -- Turn left to face south
+    movement.turnLeft()
+    
+    -- South side (back to origin)
+    print("Mining SOUTH side...")
+    minePerimeterSide(CONFIG.squareSize)
+    
+    -- Turn left to face east again (original direction)
+    movement.turnLeft()
+    
+    print("Perimeter complete! Now at origin facing east.")
+end
+
+--- Mine all internal branches (parallel tunnels filling the square)
+-- Uses a serpentine pattern: mine east, move north, mine west, move north, repeat
+local function mineInternalBranches()
+    -- Calculate number of branches based on spacing
+    -- If squareSize is 50 and spacing is 3, we get branches at positions 4, 8, 12, ... 48
+    local numBranches = math.floor((CONFIG.squareSize - 1) / (CONFIG.branchSpacing + 1))
+    local branchLength = CONFIG.squareSize - 2  -- Branches go inside the perimeter
+    
+    print("=== Mining Internal Branches ===")
+    print(string.format("Branches: %d (spaced %d blocks apart)", numBranches, CONFIG.branchSpacing))
+    print(string.format("Branch length: %d blocks each", branchLength))
+    sleep(1)
+    
+    -- We're at origin (southwest corner) facing east
+    -- Move into the square to start first branch
+    movement.forward(true)  -- Move 1 block east (inside perimeter)
+    movement.turnLeft()     -- Face north
+    movement.forward(true)  -- Move 1 block north (inside perimeter)
+    movement.turnRight()    -- Face east again
+    
+    -- Track which direction we're mining (alternates each branch)
+    local goingEast = true
+    
+    for branchNum = 1, numBranches do
+        -- Check safety
+        if not hasSafeFuel() then
+            print("Low fuel, returning home...")
+            returnHomeAndDeposit()
+        end
+        
+        -- Check inventory
+        if inventory.isFull(2) then
+            print("Inventory full, returning home...")
+            returnHomeAndDeposit()
+        end
+        
+        -- Move north to next branch position (except for first branch)
+        if branchNum > 1 then
+            -- Turn to face north
+            if goingEast then
+                movement.turnLeft()
+            else
+                movement.turnRight()
+            end
+            
+            -- Move north by spacing + 1 blocks
+            for step = 1, CONFIG.branchSpacing + 1 do
+                if not hasSafeFuel() then returnHomeAndDeposit() end
+                movement.forward(true)  -- Already mined by perimeter, just walk
+            end
+            
+            -- Turn to face mining direction
+            if goingEast then
+                movement.turnRight()  -- Now facing east
+            else
+                movement.turnLeft()   -- Now facing west
+            end
+        end
+        
+        -- Mine this branch
+        print(string.format("Mining branch %d/%d (%s)...", branchNum, numBranches, goingEast and "east" or "west"))
+        mineBranch(branchLength)
+        
+        -- Toggle direction for next branch
+        goingEast = not goingEast
+    end
+    
+    print("All internal branches complete!")
+end
+
+--- Main square mining pattern
+-- Mines a square perimeter, then fills with parallel branches
+local function squareMine()
+    print(string.format("Square mining pattern:"))
+    print(string.format("  Square size: %d x %d", CONFIG.squareSize, CONFIG.squareSize))
+    print(string.format("  Branch spacing: %d blocks", CONFIG.branchSpacing))
+    print("")
+    sleep(2)
+    
+    -- Phase 1: Mine the perimeter
+    mineSquarePerimeter()
+    
+    -- Return home and restock before branches
+    print("Perimeter done! Restocking...")
+    movement.goHome(true)
+    movement.turnTo(0)
+    movement.turnAround()
+    depositAndRestock()
+    movement.turnAround()
+    
+    -- Phase 2: Mine internal branches
+    mineInternalBranches()
     
     -- Return home
     print("Mining complete! Returning home...")
@@ -993,9 +1062,8 @@ local function main()
     parseArgs()
     
     print("=== Smart Mining Turtle ===")
-    print(string.format("Branch length: %d", CONFIG.branchLength))
-    print(string.format("Branches per side: %d", CONFIG.branchCount))
-    print(string.format("Branch spacing: %d", CONFIG.branchSpacing))
+    print(string.format("Square size: %d x %d", CONFIG.squareSize, CONFIG.squareSize))
+    print(string.format("Branch spacing: %d blocks", CONFIG.branchSpacing))
     if CONFIG.useSnakeMining then
         print("Mining mode: SNAKE (1x3 tunnel)")
     elseif CONFIG.usePokeholes then
@@ -1007,11 +1075,14 @@ local function main()
     
     -- Check fuel
     if not fuel.isUnlimited() then
-        -- Pokeholes add ~2 extra blocks mined per interval
-        local pokeholeExtra = CONFIG.usePokeholes and (CONFIG.branchLength / CONFIG.pokeholeInterval * 2) or 0
-        local totalDistance = CONFIG.branchLength * CONFIG.branchCount * 4 + 
-                              CONFIG.branchCount * CONFIG.branchSpacing * 2 +
-                              CONFIG.branchCount * 2 * pokeholeExtra
+        -- Estimate: perimeter = 4*size, branches = numBranches * branchLength * 2 (there and back)
+        local numBranches = math.floor((CONFIG.squareSize - 1) / (CONFIG.branchSpacing + 1))
+        local branchLength = CONFIG.squareSize - 2
+        local pokeholeExtra = CONFIG.usePokeholes and (branchLength / CONFIG.pokeholeInterval * 2 * numBranches) or 0
+        local totalDistance = (4 * CONFIG.squareSize) +          -- Perimeter
+                              (numBranches * branchLength * 2) + -- Branches (there and back)
+                              (numBranches * CONFIG.branchSpacing) + -- Moving between branches
+                              pokeholeExtra
         print(string.format("Estimated fuel needed: %d", math.ceil(totalDistance)))
         print(string.format("Current fuel: %d", fuel.getLevel()))
         
@@ -1065,11 +1136,11 @@ local function main()
     
     -- Initialize start position
     movement.setPosition(0, 0, 0)
-    movement.setFacing(0)  -- Assume facing north
+    movement.setFacing(0)  -- Assume facing east (into the mine)
     stats.startTime = os.clock()
     
-    -- Start branch mining
-    branchMine()
+    -- Start square mining pattern
+    squareMine()
     
     -- Print final stats
     print("")
