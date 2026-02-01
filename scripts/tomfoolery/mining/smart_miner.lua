@@ -417,20 +417,27 @@ end
 
 --- Mine a 2-tall tunnel forward
 local function mineTunnelStep(checkOres, placeTorch)
-    -- Dig forward
+    -- Dig forward and move into the space
     digForwardAndMove()
     
-    -- Dig block above
-    digUpBlock()
+    -- ALWAYS dig up to ensure 2-block tall tunnel
+    -- This handles cases where gravel falls after we move
+    miningUtils.digUp()
+    if turtle.detectUp() then
+        -- Still blocked? Try again (handles gravel)
+        miningUtils.digUp()
+        stats.blocksMined = stats.blocksMined + 1
+    end
     
     -- Check for ores if enabled
     if checkOres then
         checkForOres()
     end
     
-    -- Place torch if needed
-    if placeTorch then
-        miningUtils.placeTorch("up")
+    -- Place torch if needed (and we have torches)
+    if placeTorch and getTorchCount() > 0 then
+        turtle.select(CONFIG.torchSlot)
+        turtle.placeUp()
     end
     
     -- Periodic cleanup
