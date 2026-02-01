@@ -207,6 +207,35 @@ parallel.waitForAny(func1, func2, ...)
 parallel.waitForAll(func1, func2, ...)
 ```
 
+#### 9. Redstone API
+```lua
+-- Read redstone input from a side
+redstone.getInput("top")      -- returns boolean
+redstone.getAnalogInput("top") -- returns 0-15
+
+-- Set redstone output
+redstone.setOutput("left", true)
+redstone.setAnalogOutput("left", 15)  -- 0-15
+
+-- Bundled cable (if available)
+redstone.getBundledInput("back")
+redstone.setBundledOutput("back", colors.combine(colors.red, colors.blue))
+```
+
+#### 10. Colors API
+```lua
+-- Color constants for term, monitors, bundled cables
+colors.white, colors.orange, colors.magenta, colors.lightBlue
+colors.yellow, colors.lime, colors.pink, colors.gray
+colors.lightGray, colors.cyan, colors.purple, colors.blue
+colors.brown, colors.green, colors.red, colors.black
+
+-- Bundled cable combinations
+colors.combine(colors.red, colors.blue)
+colors.subtract(combined, colors.red)
+colors.test(combined, colors.blue)  -- returns boolean
+```
+
 ### Best Practices
 
 #### 1. Always Handle Failures
@@ -308,6 +337,167 @@ if x then
     print(("Position: %d, %d, %d"):format(x, y, z))
 else
     print("GPS unavailable")
+end
+```
+
+#### User Input Pattern
+```lua
+write("length: ")
+local length = tonumber(read())
+write("direction (l, r): ")
+local direction = read():lower()
+
+-- Normalize input
+if direction == "l" or direction == "left" then
+    direction = "left"
+elseif direction == "r" or direction == "right" then
+    direction = "right"
+end
+```
+
+#### Fuel Check with User Prompt
+```lua
+local MIN_FUEL_LEVEL = 100
+
+local function verifyFuelLevel()
+    local fuelLevel = turtle.getFuelLevel()
+    if fuelLevel ~= "unlimited" and fuelLevel <= MIN_FUEL_LEVEL then
+        write("Fuel level low. Insert fuel & press enter to continue.\n")
+        read()
+        shell.run("refuel", "all")
+        print("New fuel level: " .. turtle.getFuelLevel())
+    end
+end
+```
+
+#### Gravel/Sand Safe Dig Pattern
+```lua
+-- Keep digging until block stops falling
+local function digUntilEmpty()
+    while turtle.detect() do 
+        turtle.dig()
+        sleep(0.4)  -- wait for falling blocks
+    end
+end
+
+local function forwardAndDig()
+    repeat
+        turtle.dig()
+    until turtle.forward()
+end
+```
+
+#### Redstone Control Loop
+```lua
+-- Monitor redstone and control outputs
+while true do
+    if redstone.getInput("top") then
+        redstone.setOutput("left", true)
+    end
+    if redstone.getInput("right") then
+        redstone.setOutput("left", false)
+    end
+    os.sleep(1)
+end
+```
+
+#### Safe Rednet Open
+```lua
+local function safeRednetOpen(side)
+    if not rednet.isOpen() then
+        rednet.open(side or "top")
+    end
+end
+```
+
+#### GPS Position Transmitter
+```lua
+local function getCords()
+    while true do
+        local x, y, z = gps.locate()
+        if x then return x, y, z end
+        os.sleep(1)
+    end
+end
+
+local function startTransmitter(topCord, bottomCord)
+    safeRednetOpen("top")
+    while true do
+        local x, y, z = getCords()
+        if y < bottomCord then
+            rednet.broadcast("AT_BOTTOM")
+            os.sleep(60)
+        elseif y > topCord then
+            rednet.broadcast("AT_TOP")
+            os.sleep(60)
+        end
+        os.sleep(1)
+    end
+end
+```
+
+#### Message Receiver with Redstone Output
+```lua
+local function startReceiver(messageName, redstoneSide, value)
+    safeRednetOpen("top")
+    while true do
+        local senderId, message = rednet.receive()
+        if message == messageName then
+            redstone.setOutput(redstoneSide, value)
+        end
+        os.sleep(1)
+    end
+end
+```
+
+#### Inventory Slot Rotation
+```lua
+local slot = 1
+
+local function checkAndFillSlot()
+    while turtle.getItemCount(slot) == 0 do
+        slot = slot + 1
+        if slot > 16 then
+            slot = 1
+        end
+        turtle.select(slot)
+    end
+end
+```
+
+#### 3D Mining Loop Pattern
+```lua
+local turn = "left"
+
+local function adjustOrientation()
+    if turn == "left" then
+        turtle.turnLeft()
+        forwardAndDig()
+        turtle.turnLeft()
+        turn = "right"
+    else
+        turtle.turnRight()
+        forwardAndDig()
+        turtle.turnRight()
+        turn = "left"
+    end
+end
+
+-- Mine a 3D area
+for depth = 1, maxDepth do
+    for length = 1, maxLength do
+        for width = 1, maxWidth - 1 do
+            digUpOrDown()
+            forwardAndDig()
+        end
+        digUpOrDown()
+        if length ~= maxLength then
+            adjustOrientation()
+        end
+    end
+    -- Move to next layer
+    if direction == "up" then turtle.up() else turtle.down() end
+    turtle.turnLeft() turtle.turnLeft()  -- reverse direction
 end
 ```
 

@@ -87,8 +87,26 @@ end
 3. **Using global variables** - Always use `local` for better performance
 4. **Hardcoding key codes** - Use `keys.enter` instead of `28`
 5. **Ignoring fuel** - Turtles need fuel to move (except in creative)
+6. **Not handling gravel/sand** - Use `repeat turtle.dig() until turtle.forward()` pattern
+7. **Missing sleep in loops** - Add `sleep(0.2)` or `os.sleep(1)` in busy loops
+
+## Project-Specific Patterns
+
+### Rednet Message System
+This project uses rednet for distributed control:
+- Transmitters broadcast position events: `AT_TOP`, `AT_BOTTOM`
+- Receivers trigger redstone outputs based on messages
+- Always use `safeRednetOpen()` pattern to avoid duplicate opens
+
+### Create Mod Integration
+Scripts integrate with Create mod machinery via redstone:
+- Monitor redstone inputs and set outputs accordingly
+- Use `redstone.getInput(side)` and `redstone.setOutput(side, value)`
+- Control clutches, gearshifts, gantries programmatically
 
 ## Workspace References
 - Documentation: [docs/cc-tweaked/](docs/cc-tweaked/)
-- Example scripts: [scripts/turtle/](scripts/turtle/)
+- Turtle examples: [scripts/turtle/](scripts/turtle/)
+- Computer examples: [scripts/computer/](scripts/computer/)
+- Rednet query system: [scripts/computer/query/](scripts/computer/query/)
 - API stubs: [docs/cc-tweaked/stub/](docs/cc-tweaked/stub/)
