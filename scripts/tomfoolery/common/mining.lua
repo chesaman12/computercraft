@@ -188,12 +188,23 @@ function M.isDangerous(blockData)
     return M.DANGER_BLOCKS[blockData.name] == true
 end
 
+--- Maximum depth for ore vein following
+M.MAX_VEIN_DEPTH = 16
+
 --- Check for ores in all directions and mine them
 -- @param movement table Movement module reference
 -- @param oreList table|nil Custom ore list (optional)
+-- @param depth number|nil Current recursion depth (internal use)
 -- @return number Number of ores mined
-function M.checkAndMineOres(movement, oreList)
+function M.checkAndMineOres(movement, oreList, depth)
     oreList = oreList or M.ORES
+    depth = depth or 0
+    
+    -- Prevent infinite recursion / going too deep into veins
+    if depth >= M.MAX_VEIN_DEPTH then
+        return 0
+    end
+    
     local mined = 0
     
     -- Check front
@@ -201,7 +212,7 @@ function M.checkAndMineOres(movement, oreList)
     if M.isOre(front, oreList) then
         M.digForward()
         movement.forward(false)
-        mined = mined + 1 + M.checkAndMineOres(movement, oreList)  -- Recursive vein mining
+        mined = mined + 1 + M.checkAndMineOres(movement, oreList, depth + 1)  -- Recursive vein mining
         movement.back()
     end
     
@@ -210,7 +221,7 @@ function M.checkAndMineOres(movement, oreList)
     if M.isOre(up, oreList) then
         M.digUp()
         movement.up(false)
-        mined = mined + 1 + M.checkAndMineOres(movement, oreList)
+        mined = mined + 1 + M.checkAndMineOres(movement, oreList, depth + 1)
         movement.down(false)
     end
     
@@ -219,7 +230,7 @@ function M.checkAndMineOres(movement, oreList)
     if M.isOre(down, oreList) then
         M.digDown()
         movement.down(false)
-        mined = mined + 1 + M.checkAndMineOres(movement, oreList)
+        mined = mined + 1 + M.checkAndMineOres(movement, oreList, depth + 1)
         movement.up(false)
     end
     
@@ -229,7 +240,7 @@ function M.checkAndMineOres(movement, oreList)
     if M.isOre(front, oreList) then
         M.digForward()
         movement.forward(false)
-        mined = mined + 1 + M.checkAndMineOres(movement, oreList)
+        mined = mined + 1 + M.checkAndMineOres(movement, oreList, depth + 1)
         movement.back()
     end
     
@@ -239,7 +250,7 @@ function M.checkAndMineOres(movement, oreList)
     if M.isOre(front, oreList) then
         M.digForward()
         movement.forward(false)
-        mined = mined + 1 + M.checkAndMineOres(movement, oreList)
+        mined = mined + 1 + M.checkAndMineOres(movement, oreList, depth + 1)
         movement.back()
     end
     

@@ -252,9 +252,24 @@ end
 local function depositAndRestock()
     -- First check if there's actually a chest in front
     if not isChestInFront() then
-        print("WARNING: No chest found! Dropping junk instead.")
-        inventory.dropJunk()
-        return false
+        print("")
+        print("========================================")
+        printError("  ERROR: No chest found!")
+        print("========================================")
+        print("")
+        print("The turtle expected a chest behind the")
+        print("starting position but didn't find one.")
+        print("")
+        print("Please place a chest and press Enter.")
+        
+        -- Wait for chest to be placed
+        while not isChestInFront() do
+            read()
+            if not isChestInFront() then
+                print("Still no chest detected. Please place a chest.")
+            end
+        end
+        print("Chest detected! Continuing...")
     end
     
     -- Drop junk first to make room
@@ -537,14 +552,13 @@ local function branchMine()
         movement.turnRight()
         mineBranch(CONFIG.branchLength)
         
-        -- Return to main tunnel (check fuel during return)
+        -- Return to main tunnel
+        -- Note: We don't check fuel here because:
+        -- 1. mineBranch already ensured we have enough fuel to return
+        -- 2. If we went home mid-branch, depositAndRestock waits for fuel
         movement.turnAround()
+        print("Returning to main tunnel...")
         for step = 1, CONFIG.branchLength do
-            if not hasSafeFuel() then
-                -- We're in the branch, need to return home then come back
-                print("Low fuel during return, going home first...")
-                returnHomeAndDeposit()
-            end
             movement.forward(true)
         end
         
@@ -555,13 +569,10 @@ local function branchMine()
         movement.turnRight()
         mineBranch(CONFIG.branchLength)
         
-        -- Return to main tunnel (check fuel during return)
+        -- Return to main tunnel
         movement.turnAround()
+        print("Returning to main tunnel...")
         for step = 1, CONFIG.branchLength do
-            if not hasSafeFuel() then
-                print("Low fuel during return, going home first...")
-                returnHomeAndDeposit()
-            end
             movement.forward(true)
         end
         movement.turnRight()  -- Face forward again
