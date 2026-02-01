@@ -2,14 +2,14 @@
 
 A collection of CC:Tweaked turtle automation scripts organized into categories with shared modules.
 
-> **Note:** This is the `feature/installer-refactor` branch for testing. Once verified, it will be merged to main.
+> **Note:** This is the `turtle-overhaul` branch for testing. Once merged to main, update the installer URL below to use `main` instead of `turtle-overhaul`.
 
 ## Installation
 
 On your turtle, run:
 
 ```
-wget https://raw.githubusercontent.com/chesaman12/computercraft/feature/installer-refactor/scripts/turtle/installer.lua installer
+wget https://raw.githubusercontent.com/chesaman12/computercraft/turtle-overhaul/scripts/turtle/installer.lua installer
 installer
 ```
 

@@ -2,7 +2,7 @@
 -- Downloads all required files from GitHub to the turtle
 --
 -- Usage:
---   wget https://raw.githubusercontent.com/chesaman12/computercraft/feature/installer-refactor/scripts/turtle/installer.lua installer
+--   wget https://raw.githubusercontent.com/chesaman12/computercraft/turtle-overhaul/scripts/turtle/installer.lua installer
 --   installer
 --
 -- Commands:
@@ -17,7 +17,8 @@
 -- ============================================
 local GITHUB_USER = "chesaman12"
 local GITHUB_REPO = "computercraft"
-local GITHUB_BRANCH = "feature/installer-refactor"
+-- NOTE: Change this to "main" after merging turtle-overhaul branch
+local GITHUB_BRANCH = "turtle-overhaul"
 local PROJECT_FOLDER = "turtle"
 
 -- Base URL for raw GitHub content
