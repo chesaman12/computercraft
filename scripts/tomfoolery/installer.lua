@@ -127,6 +127,7 @@ local function install()
     end
     
     print("Downloading from: " .. GITHUB_USER .. "/" .. GITHUB_REPO)
+    print("Base URL: " .. baseUrl)
     print("")
     
     -- Create directories
@@ -137,6 +138,7 @@ local function install()
     local succeeded = 0
     local failed = 0
     local skipped = 0
+    local errors = {}  -- Collect errors for display at end
     
     for _, file in ipairs(files) do
         local path = file.path
@@ -149,8 +151,12 @@ local function install()
         else
             if file.required then
                 print("[FAILED]")
-                printError("    Error: " .. tostring(err))
                 failed = failed + 1
+                table.insert(errors, {
+                    path = path,
+                    error = tostring(err),
+                    url = baseUrl .. path
+                })
             else
                 print("[SKIPPED]")
                 skipped = skipped + 1
@@ -172,8 +178,19 @@ local function install()
     
     if failed > 0 then
         print("")
-        printError("Some required files failed to download!")
-        printError("Check your GitHub settings and try again.")
+        printError("=== ERRORS ===")
+        for _, e in ipairs(errors) do
+            print("")
+            printError("File: " .. e.path)
+            printError("URL:  " .. e.url)
+            printError("Error: " .. e.error)
+        end
+        print("")
+        printError("Troubleshooting:")
+        printError("1. Check the URL in a browser - does it exist?")
+        printError("2. Verify GITHUB_USER is correct: " .. GITHUB_USER)
+        printError("3. Verify repo is public and branch exists")
+        printError("4. Check server HTTP whitelist settings")
         return false
     end
     
