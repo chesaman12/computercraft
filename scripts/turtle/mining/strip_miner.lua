@@ -723,7 +723,6 @@ end
 --- Recursively mine connected ore blocks.
 -- @param visited table Table of "x:y:z" keys to avoid revisiting nodes.
 local function mineVein(visited)
-    logger.debug("Ore scan at x=%d y=%d z=%d", posX, posY, posZ)
     visited[makeKey(posX, posY, posZ)] = true
 
     -- Check each direction for ore; if found, recurse to mine that vein before checking others.
