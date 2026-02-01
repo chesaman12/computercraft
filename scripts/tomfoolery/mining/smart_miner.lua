@@ -1133,9 +1133,6 @@ local function mineInternalBranches()
     print("")
     print("=== All internal branches complete! ===")
 end
-    
-    print("All internal branches complete!")
-end
 
 --- Main square mining pattern
 -- Mines a square perimeter, then fills with parallel branches
