@@ -1048,136 +1048,91 @@ local function calculateAdjustedSquareSize(targetSize)
 end
 
 --- Mine all internal branches (parallel tunnels filling the square)
--- Uses a serpentine pattern: mine east, move north, mine west, move north, repeat
+-- SIMPLE APPROACH: Go home after each branch, navigate fresh to the next one.
+-- Less efficient but guaranteed to work correctly.
 local function mineInternalBranches()
-    -- Use the adjusted size stored by squareMine()
     local adjustedSize = CONFIG.adjustedSquareSize
     local _, numBranches = calculateAdjustedSquareSize(CONFIG.squareSize)
     
-    -- Branch length calculation:
-    -- We start at position (startOffset, startOffset) from origin
-    -- We end at position (adjustedSize - startOffset - 1) 
-    -- So length = adjustedSize - 2 * startOffset
-    local startOffset = CONFIG.branchSpacing + 1
+    local startOffset = CONFIG.branchSpacing + 1  -- How far in from edges
     local branchLength = adjustedSize - 2 * startOffset
     
     print("=== Mining Internal Branches ===")
-    print(string.format("Adjusted square size: %d", adjustedSize))
-    print(string.format("Branches: %d (spaced %d blocks apart)", numBranches, CONFIG.branchSpacing))
-    print(string.format("Branch length: %d blocks each", branchLength))
-    print(string.format("Starting offset: %d blocks from edge", startOffset))
+    print(string.format("  Square size: %d", adjustedSize))
+    print(string.format("  Branches: %d", numBranches))
+    print(string.format("  Branch length: %d", branchLength))
+    print(string.format("  Start offset: %d", startOffset))
     
-    -- Sanity check
-    if numBranches < 1 then
-        print("ERROR: No branches to mine (numBranches < 1)!")
-        return
-    end
-    if branchLength < 1 then
-        print("ERROR: Branch length too short (branchLength < 1)!")
+    if numBranches < 1 or branchLength < 1 then
+        print("ERROR: Invalid branch parameters!")
         return
     end
     
     sleep(1)
     
-    -- We're at origin (southwest corner) facing east
-    -- Need to move to the first branch starting position:
-    -- - startOffset blocks east (into the interior, leaving proper gap from west wall)
-    -- - startOffset blocks north (leaving proper gap from south wall)
-    -- This area is UNMINED (interior of square), so we need to mine our way in
-    
-    print(string.format("Moving to first branch position (%d blocks in)...", startOffset))
-    print("Step 1: Mining east into square...")
-    
-    -- Mine east into the square (2-tall tunnel through unmined interior)
-    for i = 1, startOffset do
-        print(string.format("  East step %d/%d", i, startOffset))
-        miningUtils.digForward()   -- Dig block in front at floor level
-        turtle.digUp()             -- Dig block above (head height)
-        movement.forward(true)
-    end
-    
-    -- Turn north and mine to first branch row
-    print("Step 2: Turning north...")
-    movement.turnLeft()
-    
-    print("Step 3: Mining north to first branch row...")
-    for i = 1, startOffset do
-        print(string.format("  North step %d/%d", i, startOffset))
-        miningUtils.digForward()   -- Dig block in front at floor level
-        turtle.digUp()             -- Dig block above (head height)
-        movement.forward(true)
-    end
-    
-    -- Turn east to start first branch
-    print("Step 4: Turning east, ready for first branch...")
-    movement.turnRight()
-    
-    -- Now we're at the starting position for branch 1, facing east
-    -- Track which direction we just mined (and thus which way we're facing)
-    -- true = just mined east (facing east), false = just mined west (facing west)
-    local facingEast = true  -- We start facing east for branch 1
-    
+    -- Mine each branch one at a time
+    -- After each branch, return home and navigate fresh to the next
     for branchNum = 1, numBranches do
-        -- Check safety
+        print("")
+        print(string.format("====== BRANCH %d of %d ======", branchNum, numBranches))
+        
+        -- Safety checks
         if not hasSafeFuel() then
-            print("Low fuel, returning home...")
+            print("Low fuel, restocking...")
             returnHomeAndDeposit()
         end
-        
-        -- Check inventory
         if inventory.isFull(2) then
-            print("Inventory full, returning home...")
+            print("Inventory full, restocking...")
             returnHomeAndDeposit()
         end
         
-        -- For branches after the first, move north to the next branch position
-        if branchNum > 1 then
-            -- We just finished mining a branch
-            -- The direction we're facing depends on which way we just mined
-            
-            -- Turn to face north
-            if facingEast then
-                -- We just mined east, so we're facing east
-                -- Turn LEFT to face north
-                movement.turnLeft()
-            else
-                -- We just mined west, so we're facing west
-                -- Turn RIGHT to face north
-                movement.turnRight()
-            end
-            
-            -- Mine north by spacing + 1 blocks to reach the next branch row
-            print(string.format("Mining north to branch %d...", branchNum))
-            for step = 1, CONFIG.branchSpacing + 1 do
-                if not hasSafeFuel() then returnHomeAndDeposit() end
-                miningUtils.digForward()   -- Dig at floor level
-                turtle.digUp()             -- Dig at head height  
-                movement.forward(true)
-            end
-            
-            -- Now turn to face the direction we need to mine this branch
-            -- We alternate: if we just mined east, now mine west (and vice versa)
-            if facingEast then
-                -- We were facing east, now facing north after turn
-                -- Need to mine WEST this time, so turn LEFT
-                movement.turnLeft()
-                facingEast = false  -- We're about to mine west
-            else
-                -- We were facing west, now facing north after turn
-                -- Need to mine EAST this time, so turn RIGHT
-                movement.turnRight()
-                facingEast = true   -- We're about to mine east
+        -- Step 1: Go home and face east
+        print("Returning to origin...")
+        movement.goHome(true)
+        movement.turnTo(0)  -- Face east
+        
+        -- Step 2: Calculate this branch's north position
+        -- Branch 1 is at Z = startOffset
+        -- Branch 2 is at Z = startOffset + (branchSpacing + 1)
+        -- Branch N is at Z = startOffset + (N-1) * (branchSpacing + 1)
+        local branchZ = startOffset + (branchNum - 1) * (CONFIG.branchSpacing + 1)
+        
+        print(string.format("Target position: X=%d, Z=%d", startOffset, branchZ))
+        
+        -- Step 3: Mine east to X = startOffset
+        print(string.format("Mining EAST %d blocks...", startOffset))
+        for i = 1, startOffset do
+            miningUtils.digForward()
+            turtle.digUp()
+            if not movement.forward(true) then
+                print("ERROR: Failed to move forward!")
+                sleep(1)
             end
         end
         
-        -- Mine this branch
-        local direction = facingEast and "east" or "west"
-        print(string.format("Mining branch %d/%d (%s)...", branchNum, numBranches, direction))
+        -- Step 4: Turn north and mine to Z = branchZ
+        movement.turnLeft()  -- Now facing north
+        print(string.format("Mining NORTH %d blocks...", branchZ))
+        for i = 1, branchZ do
+            miningUtils.digForward()
+            turtle.digUp()
+            if not movement.forward(true) then
+                print("ERROR: Failed to move forward!")
+                sleep(1)
+            end
+        end
+        
+        -- Step 5: Turn east and mine the branch
+        movement.turnRight()  -- Now facing east
+        print(string.format("Mining BRANCH %d blocks EAST...", branchLength))
         mineBranch(branchLength)
         
-        -- Note: facingEast already reflects the direction we just mined
-        -- (it was set before mining, or it's the initial true for branch 1)
+        print(string.format("Branch %d complete!", branchNum))
     end
+    
+    print("")
+    print("=== All internal branches complete! ===")
+end
     
     print("All internal branches complete!")
 end
