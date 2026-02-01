@@ -303,6 +303,16 @@ shell.run("bg_program")  -- run in background
 shell.run("main")        -- run main program
 ```
 
+#### 6. Packaging and Deployment
+- Keep an entry point per program (`startup`, `startup.lua`, or `main.lua`).
+- Organize helpers as modules and load with `require` from the same folder.
+- Avoid spaces in file names to simplify `pastebin` and `wget` usage.
+- Recommended loading options:
+    - Pastebin: `pastebin put <file.lua>` then `pastebin get <id> <file.lua>`
+    - Local HTTP server: `wget http://<host>:8000/path/file.lua file.lua`
+    - World save copy: `saves/<world>/computercraft/computer/<id>/`
+    - Disk drive: copy to floppy and use in-game `copy`/`cp`
+
 ### Common Patterns
 
 #### Mining Turtle Pattern
