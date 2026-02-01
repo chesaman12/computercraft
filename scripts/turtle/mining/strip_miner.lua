@@ -55,6 +55,12 @@ local dir = 0
 local totalSteps = 0
 local currentStep = 0
 
+-- Statistics tracking
+local moveCount = 0
+local turnCount = 0
+local startTime = 0
+local startFuel = 0
+
 local function showProgress()
     if totalSteps > 0 then
         local pct = math.floor((currentStep / totalSteps) * 100)
@@ -68,12 +74,14 @@ end
 local function turnLeft()
     turtle.turnLeft()
     dir = (dir + 3) % 4
+    turnCount = turnCount + 1
     logger.debug("Turned left, now facing %d", dir)
 end
 
 local function turnRight()
     turtle.turnRight()
     dir = (dir + 1) % 4
+    turnCount = turnCount + 1
     logger.debug("Turned right, now facing %d", dir)
 end
 
@@ -103,7 +111,85 @@ local function updatePosition()
     end
 end
 
-local function moveForward1x2()
+local function moveUpSafe()
+    local attempts = 0
+    while not turtle.up() do
+        if turtle.detectUp() then
+            turtle.digUp()
+            turtle.suckUp()
+        else
+            sleep(0.2)
+        end
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            logger.error("Cannot move up at x=%d z=%d", posX, posZ)
+            print("\nCannot move up.")
+            return false
+        end
+    end
+    moveCount = moveCount + 1
+    return true
+end
+
+local function moveDownSafe()
+    local attempts = 0
+    while not turtle.down() do
+        if turtle.detectDown() then
+            turtle.digDown()
+            turtle.suckDown()
+        else
+            sleep(0.2)
+        end
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            logger.error("Cannot move down at x=%d z=%d", posX, posZ)
+            print("\nCannot move down.")
+            return false
+        end
+    end
+    moveCount = moveCount + 1
+    return true
+end
+
+local function clearCeiling2()
+    local attempts = 0
+    while turtle.detectUp() do
+        turtle.digUp()
+        turtle.suckUp()
+        sleep(0.2)
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            logger.error("Stuck on unbreakable block above at x=%d z=%d", posX, posZ)
+            print("\nStuck on unbreakable block above.")
+            return false
+        end
+    end
+
+    if not moveUpSafe() then
+        return false
+    end
+
+    attempts = 0
+    while turtle.detectUp() do
+        turtle.digUp()
+        turtle.suckUp()
+        sleep(0.2)
+        attempts = attempts + 1
+        if attempts > MAX_DIG_ATTEMPTS then
+            logger.error("Stuck on unbreakable block above (level 2) at x=%d z=%d", posX, posZ)
+            print("\nStuck on unbreakable block above.")
+            return false
+        end
+    end
+
+    if not moveDownSafe() then
+        return false
+    end
+
+    return true
+end
+
+local function moveForward1x3()
     local attempts = 0
     while turtle.detect() do
         logger.debug("Digging ahead at x=%d z=%d", posX, posZ)
@@ -114,20 +200,6 @@ local function moveForward1x2()
         if attempts > MAX_DIG_ATTEMPTS then
             logger.error("Stuck on unbreakable block ahead at x=%d z=%d", posX, posZ)
             print("\nStuck on unbreakable block ahead.")
-            return false
-        end
-    end
-
-    attempts = 0
-    while turtle.detectUp() do
-        logger.debug("Digging up at x=%d z=%d", posX, posZ)
-        turtle.digUp()
-        turtle.suckUp()
-        sleep(0.2)
-        attempts = attempts + 1
-        if attempts > MAX_DIG_ATTEMPTS then
-            logger.error("Stuck on unbreakable block above at x=%d z=%d", posX, posZ)
-            print("\nStuck on unbreakable block above.")
             return false
         end
     end
@@ -150,8 +222,9 @@ local function moveForward1x2()
     end
 
     updatePosition()
+    moveCount = moveCount + 1
     logger.debug("Moved forward to x=%d z=%d", posX, posZ)
-    return true
+    return clearCeiling2()
 end
 
 local function moveForwardSafe()
@@ -172,6 +245,7 @@ local function moveForwardSafe()
         end
     end
     updatePosition()
+    moveCount = moveCount + 1
     logger.debug("Moved forward (safe) to x=%d z=%d", posX, posZ)
     return true
 end
@@ -281,35 +355,56 @@ local function checkFuelPeriodic()
     return true
 end
 
-local function mineBranch(length, fullMode)
-    logger.debug("Starting branch (length=%d) at x=%d z=%d", length, posX, posZ)
-    for i = 1, length do
-        if not moveForward1x2() then return false end
-        ensureInventorySpace(fullMode)
-        currentStep = currentStep + 1
-        showProgress()
-        if not checkFuelPeriodic() then return false end
+local function mineForward(fullMode)
+    if not moveForward1x3() then return false end
+    ensureInventorySpace(fullMode)
+    currentStep = currentStep + 1
+    showProgress()
+    if not checkFuelPeriodic() then return false end
+    return true
+end
+
+local function mineParallelCorridors(corridorLength, corridorCount, gap, fullMode)
+    local shift = gap + 1
+    for corridor = 1, corridorCount do
+        logger.debug("Mining corridor %d/%d at x=%d z=%d", corridor, corridorCount, posX, posZ)
+        for i = 1, corridorLength do
+            if not mineForward(fullMode) then return false end
+        end
+
+        if corridor < corridorCount then
+            if dir == 0 then
+                turnRight()
+                for i = 1, shift do
+                    if not mineForward(fullMode) then return false end
+                end
+                turnRight()
+            elseif dir == 2 then
+                turnLeft()
+                for i = 1, shift do
+                    if not mineForward(fullMode) then return false end
+                end
+                turnLeft()
+            else
+                logger.warn("Unexpected direction %d, realigning", dir)
+                turnTo(0)
+                turnRight()
+                for i = 1, shift do
+                    if not mineForward(fullMode) then return false end
+                end
+                turnRight()
+            end
+        end
     end
-    logger.debug("Branch dig complete, returning from x=%d z=%d", posX, posZ)
-    turnAround()
-    for i = 1, length do
-        if not moveForwardSafe() then return false end
-        ensureInventorySpace(fullMode)
-        currentStep = currentStep + 1
-        showProgress()
-    end
-    turnAround()
-    logger.debug("Branch complete, back at x=%d z=%d", posX, posZ)
     return true
 end
 
 local function main()
-    print("Strip Miner (ladder pattern)")
+    print("Strip Miner (parallel corridors)")
     
-    local spineLength = input.readNumber("Main corridor length: ")
-    local branchLength = input.readNumber("Branch length: ")
-    local spacing = input.readNumber("Spacing between branches (default 3): ", 3)
-    local bothSides = input.readYesNo("Branches on both sides? (y/n, default y): ", true)
+    local corridorLength = input.readNumber("Corridor length: ")
+    local corridorCount = input.readNumber("Number of corridors: ")
+    local gap = input.readNumber("Rock gap between corridors (default 3): ", 3)
     local returnHome = input.readYesNo("Return to start when done? (y/n, default y): ", true)
     local fullMode = input.readChoice(
         "On full inventory: 1) pause, 2) chest + resume, 3) drop junk only: ",
@@ -317,66 +412,36 @@ local function main()
     )
 
     logger.logParams("strip_miner", {
-        spineLength = spineLength,
-        branchLength = branchLength,
-        spacing = spacing,
-        bothSides = bothSides,
+        corridorLength = corridorLength,
+        corridorCount = corridorCount,
+        gap = gap,
         returnHome = returnHome,
         fullMode = fullMode,
     })
 
-    local branchCount = math.floor((spineLength - 1) / spacing)
-    local movesPerBranch = bothSides and (branchLength * 4) or (branchLength * 2)
-    local estimatedMoves = spineLength + (returnHome and spineLength or 0) + (branchCount * movesPerBranch)
+    local shift = gap + 1
+    local corridorMoves = corridorLength * corridorCount
+    local shiftMoves = (corridorCount - 1) * shift
+    local totalMiningMoves = corridorMoves + shiftMoves
+    local estimatedReturn = returnHome and (corridorLength + shiftMoves) or 0
+    local estimatedMoves = totalMiningMoves + estimatedReturn
 
-    totalSteps = spineLength + (branchCount * (bothSides and (branchLength * 2) or branchLength))
+    totalSteps = totalMiningMoves
     currentStep = 0
+
+    startTime = os.epoch("utc")
+    startFuel = turtle.getFuelLevel()
 
     if not fuel.ensureFuel(estimatedMoves) then
         return
     end
 
-    logger.info("Starting strip mine: spine=%d branches=%d spacing=%d", spineLength, branchCount, spacing)
+    logger.info("Starting strip mine: length=%d corridors=%d gap=%d", corridorLength, corridorCount, gap)
     print("Mining " .. totalSteps .. " blocks...")
 
     local aborted = false
-    for step = 1, spineLength do
-        if not moveForward1x2() then
-            aborted = true
-            break
-        end
-        ensureInventorySpace(fullMode)
-        currentStep = currentStep + 1
-        showProgress()
-        if not checkFuelPeriodic() then
-            aborted = true
-            break
-        end
-        
-        if step % spacing == 0 and step < spineLength then
-            if bothSides then
-                turnLeft()
-                if not mineBranch(branchLength, fullMode) then
-                    aborted = true
-                    break
-                end
-                turnRight()
-
-                turnRight()
-                if not mineBranch(branchLength, fullMode) then
-                    aborted = true
-                    break
-                end
-                turnLeft()
-            else
-                turnLeft()
-                if not mineBranch(branchLength, fullMode) then
-                    aborted = true
-                    break
-                end
-                turnRight()
-            end
-        end
+    if not mineParallelCorridors(corridorLength, corridorCount, gap, fullMode) then
+        aborted = true
     end
 
     print("")
@@ -386,6 +451,32 @@ local function main()
         goTo(0, 0, 0)
     end
 
+    -- Calculate statistics
+    local endTime = os.epoch("utc")
+    local endFuel = turtle.getFuelLevel()
+    local elapsedMs = endTime - startTime
+    local elapsedSec = math.floor(elapsedMs / 1000)
+    local elapsedMin = math.floor(elapsedSec / 60)
+    local remainingSec = elapsedSec % 60
+    local fuelUsed = (startFuel ~= "unlimited" and endFuel ~= "unlimited") and (startFuel - endFuel) or 0
+    local efficiency = elapsedSec > 0 and ((currentStep / elapsedSec) * 60) or 0
+    
+    print("")
+    print("=== Mining Statistics ===")
+    print(string.format("Time: %dm %ds", elapsedMin, remainingSec))
+    print(string.format("Movements: %d", moveCount))
+    print(string.format("Turns: %d", turnCount))
+    if fuelUsed > 0 then
+        print(string.format("Fuel used: %d", fuelUsed))
+    end
+    if elapsedSec > 0 then
+        print(string.format("Efficiency: %.1f blocks/min", efficiency))
+    else
+        print("Efficiency: n/a")
+    end
+    
+    logger.info("Stats: time=%ds moves=%d turns=%d fuel=%d", elapsedSec, moveCount, turnCount, fuelUsed)
+    
     if aborted then
         logger.warn("Strip mining aborted at step %d/%d", currentStep, totalSteps)
         print("Strip mining aborted.")
