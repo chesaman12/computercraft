@@ -26,8 +26,9 @@ Every successful `turtle.forward()` increments the corresponding axis.
 
 ## High-level algorithm
 
-1. Read parameters (`corridorLength`, `corridorCount`, `gap`, `mineRight`, `returnHome`, `fullMode`).
-2. Show efficiency tips based on corridor count (odd vs even, repositioning moves).
+1. Show a pre-prompt hint about odd/even corridor counts.
+2. Read parameters (`corridorLength`, `corridorCount`, `gap`, `mineRight`, `showLogs`, `returnHome`, `fullMode`).
+3. Show efficiency tips based on corridor count (odd vs even, repositioning moves).
 3. Estimate required fuel and call `fuel.ensureFuel(...)`.
 4. **Phase 1**: Mine the perimeter rectangle (bottom bar → far corridor → top bar → near corridor).
 5. **Phase 2**: Fill in interior corridors by branching off the bars.
@@ -41,6 +42,10 @@ The `mineRight` parameter controls which way the grid expands:
 - `false`: Mine to the **left** (-X direction)
 
 This allows you to position the turtle on either side of an existing mine.
+
+## Status screen
+
+If `showLogs` is `false`, the script suppresses log output and shows a live status screen that updates during mining (progress, position, fuel, moves, turns, elapsed time).
 
 ## Efficiency guidance
 

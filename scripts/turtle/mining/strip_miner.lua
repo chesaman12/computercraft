@@ -61,8 +61,32 @@ local turnCount = 0
 local startTime = 0
 local startFuel = 0
 local canReturnHome = true
+local showLogs = true
+
+local function renderStatus()
+    local pct = totalSteps > 0 and math.floor((currentStep / totalSteps) * 100) or 0
+    local elapsedSec = startTime > 0 and math.floor((os.epoch("utc") - startTime) / 1000) or 0
+    local fuelLevel = turtle.getFuelLevel()
+
+    term.clear()
+    term.setCursorPos(1, 1)
+    print("=== Strip Miner Status ===")
+    print(string.format("Progress: %d/%d (%d%%)", currentStep, totalSteps, pct))
+    print(string.format("Position: x=%d z=%d dir=%d", posX, posZ, dir))
+    if fuelLevel == "unlimited" then
+        print("Fuel: Unlimited")
+    else
+        print(string.format("Fuel: %d", fuelLevel))
+    end
+    print(string.format("Moves: %d  Turns: %d", moveCount, turnCount))
+    print(string.format("Elapsed: %ds", elapsedSec))
+end
 
 local function showProgress()
+    if not showLogs then
+        renderStatus()
+        return
+    end
     if totalSteps > 0 then
         local pct = math.floor((currentStep / totalSteps) * 100)
         term.clearLine()
@@ -454,6 +478,7 @@ local function main()
     print("Strip Miner (symmetric grid)")
     
     local corridorLength = input.readNumber("Corridor length: ")
+    print("Tip: odd corridor counts return home faster; even counts end farther away.")
     local corridorCount = input.readNumber("Number of corridors: ")
     
     -- Efficiency tip based on corridor count
@@ -472,17 +497,21 @@ local function main()
     
     local gap = input.readNumber("Rock gap between corridors (default 3): ", 3)
     local mineRight = input.readYesNo("Mine to the right? (y/n, default y): ", true)
+    showLogs = input.readYesNo("Show log output? (y/n, default y): ", true)
     local returnHome = input.readYesNo("Return to start when done? (y/n, default y): ", true)
     local fullMode = input.readChoice(
         "On full inventory: 1) pause, 2) chest + resume, 3) drop junk only: ",
         1, 3, 1
     )
 
+    logger.setEcho(showLogs)
+
     logger.logParams("strip_miner", {
         corridorLength = corridorLength,
         corridorCount = corridorCount,
         gap = gap,
         mineRight = mineRight,
+        showLogs = showLogs,
         returnHome = returnHome,
         fullMode = fullMode,
     })
@@ -509,7 +538,11 @@ local function main()
     end
 
     logger.info("Starting strip mine: length=%d corridors=%d gap=%d right=%s", corridorLength, corridorCount, gap, tostring(mineRight))
-    print("Mining " .. totalSteps .. " blocks...")
+    if showLogs then
+        print("Mining " .. totalSteps .. " blocks...")
+    else
+        renderStatus()
+    end
 
     local aborted = false
     if not mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, mineRight) then
