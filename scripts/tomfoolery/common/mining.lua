@@ -4,8 +4,11 @@
 
 local M = {}
 
---- List of ore blocks that should be mined when found
-M.ORES = {
+-- Try to load config module for external ore lists
+local configLoaded, config = pcall(require, "common.config")
+
+--- Default ore blocks (used if config file not found)
+local DEFAULT_ORES = {
     ["minecraft:coal_ore"] = true,
     ["minecraft:deepslate_coal_ore"] = true,
     ["minecraft:iron_ore"] = true,
@@ -26,6 +29,66 @@ M.ORES = {
     ["minecraft:nether_quartz_ore"] = true,
     ["minecraft:ancient_debris"] = true,
 }
+
+--- Load ores from config file, falling back to defaults
+local function loadOres()
+    if configLoaded and config.exists("ores.cfg") then
+        local ores = config.loadSet("ores.cfg")
+        -- Check if we got any ores
+        local count = 0
+        for _ in pairs(ores) do count = count + 1 end
+        if count > 0 then
+            return ores
+        end
+    end
+    return DEFAULT_ORES
+end
+
+--- List of ore blocks that should be mined when found
+-- Loaded from config/ores.cfg if available, otherwise uses defaults
+M.ORES = loadOres()
+
+--- Reload ores from config file
+-- Call this after editing config/ores.cfg
+function M.reloadOres()
+    M.ORES = loadOres()
+    local count = 0
+    for _ in pairs(M.ORES) do count = count + 1 end
+    return count
+end
+
+--- Add an ore to the detection list (runtime only)
+-- @param oreName string Block ID (e.g., "minecraft:diamond_ore")
+function M.addOre(oreName)
+    M.ORES[oreName] = true
+end
+
+--- Remove an ore from the detection list (runtime only)
+-- @param oreName string Block ID
+function M.removeOre(oreName)
+    M.ORES[oreName] = nil
+end
+
+--- Get list of all registered ores
+-- @return table Array of ore names
+function M.getOreList()
+    local list = {}
+    for name in pairs(M.ORES) do
+        table.insert(list, name)
+    end
+    table.sort(list)
+    return list
+end
+
+--- Print all registered ores
+function M.printOres()
+    print("=== Registered Ores ===")
+    local list = M.getOreList()
+    for _, name in ipairs(list) do
+        print("  " .. name)
+    end
+    print(string.format("Total: %d ores", #list))
+end
 
 --- Blocks that indicate air/void (don't mine, can move through)
 M.AIR_BLOCKS = {

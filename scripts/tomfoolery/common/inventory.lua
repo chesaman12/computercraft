@@ -4,8 +4,11 @@
 
 local M = {}
 
+-- Try to load config module for external lists
+local configLoaded, config = pcall(require, "common.config")
+
 --- Default list of items to discard (junk blocks)
-M.JUNK_ITEMS = {
+local DEFAULT_JUNK = {
     ["minecraft:cobblestone"] = true,
     ["minecraft:dirt"] = true,
     ["minecraft:gravel"] = true,
@@ -19,6 +22,56 @@ M.JUNK_ITEMS = {
     ["minecraft:stone"] = true,
     ["minecraft:deepslate"] = true,
 }
+
+--- Load junk list from config file, falling back to defaults
+local function loadJunk()
+    if configLoaded and config.exists("junk.cfg") then
+        local junk = config.loadSet("junk.cfg")
+        local count = 0
+        for _ in pairs(junk) do count = count + 1 end
+        if count > 0 then
+            return junk
+        end
+    end
+    return DEFAULT_JUNK
+end
+
+--- Junk items loaded from config/junk.cfg or defaults
+M.JUNK_ITEMS = loadJunk()
+
+--- Reload junk list from config file
+function M.reloadJunk()
+    M.JUNK_ITEMS = loadJunk()
+    local count = 0
+    for _ in pairs(M.JUNK_ITEMS) do count = count + 1 end
+    return count
+end
+
+--- Add a junk item (runtime only)
+-- @param itemName string Block ID
+function M.addJunk(itemName)
+    M.JUNK_ITEMS[itemName] = true
+end
+
+--- Remove a junk item (runtime only)
+-- @param itemName string Block ID
+function M.removeJunk(itemName)
+    M.JUNK_ITEMS[itemName] = nil
+end
+
+--- Print all registered junk items
+function M.printJunk()
+    print("=== Junk Items ===")
+    local list = {}
+    for name in pairs(M.JUNK_ITEMS) do
+        table.insert(list, name)
+    end
+    table.sort(list)
+    for _, name in ipairs(list) do
+        print("  " .. name)
+    end
+    print(string.format("Total: %d items", #list))
+end
 
 --- Valuable ores that should always be kept
 M.VALUABLE_ITEMS = {

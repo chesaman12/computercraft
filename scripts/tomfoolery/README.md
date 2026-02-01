@@ -10,7 +10,12 @@ tomfoolery/
 │   ├── movement.lua    # Turtle movement and navigation
 │   ├── inventory.lua   # Inventory management and filtering
 │   ├── mining.lua      # Mining utilities and ore detection
-│   └── fuel.lua        # Fuel management
+│   ├── fuel.lua        # Fuel management
+│   └── config.lua      # Configuration file loader
+│
+├── config/           # Configuration files
+│   ├── ores.cfg        # Ore block IDs to detect and mine
+│   └── junk.cfg        # Junk block IDs to discard
 │
 ├── mining/           # Mining automation scripts
 │   ├── smart_miner.lua # Advanced branch mining with ore detection
@@ -19,6 +24,7 @@ tomfoolery/
 │   └── miningTunnel.lua     # (Legacy) Simple tunnel script
 │
 ├── docs/             # Documentation
+│   ├── gameplay_guide.md   # In-game setup and usage guide
 │   ├── turtle_capabilities.md  # What turtles can do
 │   └── agents.md              # AI agent definitions for development
 │
@@ -133,6 +139,47 @@ smart_miner <length> [branches] [spacing]
 4. Optionally add torches to slot 16
 5. Run: `smart_miner 50 10`
 
+For detailed in-game setup instructions, see [docs/gameplay_guide.md](docs/gameplay_guide.md).
+
+## Configuration Files
+
+The `config/` folder contains editable configuration files:
+
+### config/ores.cfg
+
+List of ore block IDs that the turtle will detect and mine. One block ID per line.
+
+```
+-- Vanilla ores (enabled by default)
+minecraft:diamond_ore
+minecraft:deepslate_diamond_ore
+
+-- Modded ores (uncomment to enable)
+-- create:zinc_ore
+-- mekanism:osmium_ore
+```
+
+### config/junk.cfg
+
+List of junk block IDs that the turtle will discard. One block ID per line.
+
+```
+minecraft:cobblestone
+minecraft:dirt
+minecraft:gravel
+```
+
+### Finding Block IDs
+
+To find a block's ID for configuration:
+
+1. Face the turtle toward the block
+2. Open Lua interpreter: `lua`
+3. Run: `turtle.inspect()`
+4. Look for the `name` field in the output
+
+Or press F3 in-game and look at a block to see its ID.
+
 ## Using the Libraries
 
 From any script in the tomfoolery folder:
@@ -146,8 +193,24 @@ local movement = require("common.movement")
 local inventory = require("common.inventory")
 local mining = require("common.mining")
 local fuel = require("common.fuel")
+local config = require("common.config")
 
 -- Your code here
+```
+
+### Reloading Configuration
+
+If you edit config files while the turtle is running:
+
+```lua
+local mining = require("common.mining")
+local inventory = require("common.inventory")
+
+-- Reload ore list
+mining.reloadOres()
+
+-- Reload junk list
+inventory.reloadJunk()
 ```
 
 ## Extending the Library
