@@ -37,6 +37,7 @@ local files = {
     { path = "common/movement.lua",   required = true },
     { path = "common/inventory.lua",  required = true },
     { path = "common/input.lua",      required = true },
+    { path = "common/logger.lua",     required = true },
 
     -- Building scripts
     { path = "building/block.lua",    required = true },
@@ -64,7 +65,20 @@ local directories = {
     "building",
     "mining",
     "utility",
+    "config",
+    "logs",
 }
+
+-- Default logger config (will be customized during install)
+local loggerConfigTemplate = [[
+# Logger configuration
+# min_level: error, warn, info, debug
+# echo: true/false - print to terminal
+# log_path: path to log file (default: /logs/<program>.log)
+
+min_level = %s
+echo = %s
+]]
 
 -- ============================================
 -- INSTALLER LOGIC
@@ -101,6 +115,41 @@ local function createDirectories()
         else
             print("  Exists:  " .. dir .. "/")
         end
+    end
+    print("")
+end
+
+local function promptLoggerConfig()
+    print("Logger Configuration")
+    print("--------------------")
+    print("")
+    print("Log levels: 1) error  2) warn  3) info  4) debug")
+    write("Select log level (1-4, default 3): ")
+    local levelInput = read()
+    local levelNum = tonumber(levelInput)
+    local levels = { "error", "warn", "info", "debug" }
+    local minLevel = levels[levelNum] or "info"
+    
+    write("Print logs to terminal? (y/n, default y): ")
+    local echoInput = read():lower()
+    local echo = (echoInput ~= "n" and echoInput ~= "no") and "true" or "false"
+    
+    print("")
+    return minLevel, echo
+end
+
+local function createLoggerConfig(minLevel, echo)
+    local path = "config/logger.cfg"
+    if not fs.exists(path) then
+        local content = string.format(loggerConfigTemplate, minLevel, echo)
+        local file = fs.open(path, "w")
+        if file then
+            file.write(content)
+            file.close()
+            print("  Created: " .. path .. " (level=" .. minLevel .. ", echo=" .. echo .. ")")
+        end
+    else
+        print("  Exists:  " .. path .. " (keeping current settings)")
     end
     print("")
 end
@@ -241,6 +290,9 @@ local function main(args)
     end
 
     createDirectories()
+    
+    local minLevel, echo = promptLoggerConfig()
+    createLoggerConfig(minLevel, echo)
 
     if downloadFiles() then
         print("========================================")
