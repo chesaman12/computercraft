@@ -726,7 +726,7 @@ local function mineVein(visited)
     logger.debug("Ore scan at x=%d y=%d z=%d", posX, posY, posZ)
     visited[makeKey(posX, posY, posZ)] = true
 
-    -- Check each direction for ore; if found, step into it and recurse before continuing.
+    -- Check each direction for ore; if found, recurse to mine that vein before checking others.
     -- Up
     if not visited[makeKey(posX, posY + 1, posZ)] then
         local ok, data = turtle.inspectUp()
@@ -816,8 +816,9 @@ local function placeTorchIfNeeded()
             return returnToChestAndBack()
         end
         logger.warn("Torches empty and return-home disabled or unsafe; pausing for user")
-        print("\nOut of torches. Return-home disabled. Add torches to the chest and press enter.")
-        read()
+        waitForResource("torches", function()
+            return getTorchCount() > 0
+        end, restockTorches, "Out of torches with return-home disabled.")
         return true
     end
 
