@@ -39,7 +39,7 @@ All bots require:
 The easiest way to install all scripts at once:
 
 ```
-wget https://raw.githubusercontent.com/YOUR_USER/computercraft/main/scripts/tomfoolery/installer.lua installer
+wget https://raw.githubusercontent.com/chesaman12/computercraft/main/scripts/tomfoolery/installer.lua installer
 installer
 ```
 

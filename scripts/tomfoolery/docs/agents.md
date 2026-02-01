@@ -310,6 +310,42 @@ All agents should generate code compatible with:
 - **CC:Tweaked Lua 5.2** syntax
 - **Module pattern:** `local M = {} ... return M`
 
+## Maintenance Tasks
+
+### Updating the Installer
+
+**IMPORTANT:** When adding new files to the repository, the installer script must be updated.
+
+Edit `tomfoolery/installer.lua` and add new files to the `files` table:
+
+```lua
+local files = {
+    -- Add new files here
+    { path = "common/newmodule.lua", required = true },
+    { path = "farming/crop_harvester.lua", required = true },
+}
+```
+
+Also add any new directories to the `directories` table:
+
+```lua
+local directories = {
+    "common",
+    "config",
+    "mining",
+    "farming",  -- Add new directories here
+}
+```
+
+**Checklist when adding new scripts:**
+
+1. Create the script in the appropriate folder
+2. Add the file path to `installer.lua` files table
+3. Add any new directories to `installer.lua` directories table
+4. Test the script locally (see `docs/testing.md`)
+5. Push changes to GitHub
+6. Test the installer downloads the new file
+
 ## Skill Reference
 
 Agents should reference the skill file at:

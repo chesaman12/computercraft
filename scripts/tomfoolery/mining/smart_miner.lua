@@ -45,6 +45,9 @@ local CONFIG = {
     homeZ = 0,
 }
 
+-- Capture command line arguments at file scope
+local tArgs = { ... }
+
 -- Statistics tracking
 local stats = {
     blocksMined = 0,
@@ -55,15 +58,14 @@ local stats = {
 
 --- Parse command line arguments
 local function parseArgs()
-    local args = { ... }
-    if args[1] then
-        CONFIG.branchLength = tonumber(args[1]) or CONFIG.branchLength
+    if tArgs[1] then
+        CONFIG.branchLength = tonumber(tArgs[1]) or CONFIG.branchLength
     end
-    if args[2] then
-        CONFIG.branchCount = tonumber(args[2]) or CONFIG.branchCount
+    if tArgs[2] then
+        CONFIG.branchCount = tonumber(tArgs[2]) or CONFIG.branchCount
     end
-    if args[3] then
-        CONFIG.branchSpacing = tonumber(args[3]) or CONFIG.branchSpacing
+    if tArgs[3] then
+        CONFIG.branchSpacing = tonumber(tArgs[3]) or CONFIG.branchSpacing
     end
 end
 
