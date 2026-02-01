@@ -17,8 +17,7 @@
 -- ============================================
 local GITHUB_USER = "chesaman12"
 local GITHUB_REPO = "computercraft"
--- NOTE: Change this to "main" after merging turtle-overhaul branch
-local GITHUB_BRANCH = "turtle-overhaul"
+local GITHUB_BRANCH = "feature/installer-refactor"
 local PROJECT_FOLDER = "turtle"
 
 -- Base URL for raw GitHub content
