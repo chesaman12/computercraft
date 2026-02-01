@@ -27,7 +27,7 @@ Every successful `turtle.forward()` increments the corresponding axis. Vertical 
 ## High-level algorithm
 
 1. Show a pre-prompt hint about odd/even corridor counts.
-2. Read parameters (`corridorLength`, `corridorCount`, `gap`, `mineRight`, `showLogs`, `enableTorches`, `torchInterval`, `fuelReserve`, `invThreshold`, `enableOreMining`, `enablePokeholes`, `pokeholeInterval`, `returnHome`, `fullMode`).
+2. Read parameters (`useDefaults`, `corridorLength`, `corridorCount`, `gap`, `mineRight`, `showLogs`, `enableTorches`, `torchInterval`, `fuelReserve`, `invThreshold`, `enableOreMining`, `enablePokeholes`, `pokeholeInterval`, `returnHome`, `fullMode`).
 3. Show efficiency tips based on corridor count (odd vs even, repositioning moves).
 4. Estimate required fuel and call `fuel.ensureFuel(...)`.
 5. **Phase 1**: Mine the perimeter rectangle (bottom bar → far corridor → top bar → near corridor).

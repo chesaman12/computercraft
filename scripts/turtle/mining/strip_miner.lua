@@ -216,7 +216,7 @@ local function printStartupSummary(config)
     local torchLine = config.enableTorches and ("torches=" .. tostring(config.torchInterval)) or "torches=off"
     local oreLine = config.enableOreMining and "ores=on" or "ores=off"
     local pokeLine = config.enablePokeholes and ("poke=" .. tostring(config.pokeholeInterval)) or "poke=off"
-    local modeLine = "fullMode=" .. tostring(config.fullMode)
+    local modeLine = string.format("return=%s mode=%d", config.returnHome and "on" or "off", config.fullMode)
     print("=== Strip Miner ===")
     print(string.format("Size: %dx%d gap=%d", config.corridorLength, config.corridorCount, config.gap))
     print(string.format("Dir: %s  logs=%s", config.mineRight and "right" or "left", tostring(config.showLogs)))
@@ -541,6 +541,11 @@ local function restockTorches()
 end
 
 local function waitForResource(resource, checkFn, restockFn, reason)
+    if reason then
+        logger.info("Waiting for %s at chest: %s", resource, reason)
+    else
+        logger.info("Waiting for %s at chest", resource)
+    end
     while not checkFn() do
         print("")
         print("========================================")
@@ -552,7 +557,6 @@ local function waitForResource(resource, checkFn, restockFn, reason)
         end
         print("Add more to the chest and press Enter.")
         read()
-        logger.info("Waiting for %s at chest", resource)
         restockFn()
     end
 end
