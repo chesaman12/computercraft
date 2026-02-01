@@ -344,15 +344,19 @@ local function returnHomeAndDeposit()
     -- Navigate home
     movement.goHome(true)
     
-    -- Turn to face chest (assumed to be behind start position)
+    -- Face the original mining direction first (direction 0)
+    -- then turn around to face the chest behind the start position
+    movement.turnTo(0)
     movement.turnAround()
     
     -- Deposit items and restock supplies
     depositAndRestock()
     
+    -- Turn back to face mining direction
+    movement.turnAround()
+    
     -- Return to mining position
     print("Returning to mining position...")
-    movement.turnAround()
     movement.goTo(savedPos.x, savedPos.y, savedPos.z, true)
     movement.turnTo(savedFacing)
     
@@ -582,7 +586,8 @@ local function branchMine()
     print("Mining complete! Returning home...")
     movement.goHome(true)
     
-    -- Deposit final load
+    -- Face original direction then turn to chest
+    movement.turnTo(0)
     movement.turnAround()
     depositAndRestock()
 end
@@ -635,6 +640,7 @@ local function main()
     -- Verify chest is behind turtle
     print("")
     print("Checking for chest behind turtle...")
+    -- At startup, facing should be 0 (forward), so turnAround faces chest
     movement.turnAround()
     if isChestInFront() then
         print("Chest detected!")
@@ -642,6 +648,7 @@ local function main()
         printError("WARNING: No chest detected behind turtle!")
         print("Place a chest behind the turtle for deposits.")
         print("Press Enter to continue anyway, or add chest first.")
+        read()
     end
     movement.turnAround()
     
