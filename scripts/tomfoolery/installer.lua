@@ -11,7 +11,7 @@
 -- ============================================
 -- CONFIGURATION - Update this URL to match your GitHub repo
 -- ============================================
-local GITHUB_USER = "YOUR_USERNAME"  -- Change this to your GitHub username
+local GITHUB_USER = "chesaman12"  -- Change this to your GitHub username
 local GITHUB_REPO = "computercraft"   -- Change this to your repo name
 local GITHUB_BRANCH = "main"          -- Change if using different branch
 
