@@ -336,53 +336,30 @@ Log File: %s
     local fullContent = header .. content
     
     -- Upload to Pastebin
-    -- Note: Without an API key, we use the public paste endpoint
-    -- which has more restrictions but works for basic uploads
-    local postData
-    
-    if config.pastebin_key then
-        -- Authenticated upload (more features, higher limits)
-        postData = string.format(
-            "api_dev_key=%s&api_option=paste&api_paste_code=%s&api_paste_name=%s&api_paste_expire_date=1W",
-            urlEncode(config.pastebin_key),
-            urlEncode(fullContent),
-            urlEncode(title)
-        )
-    else
-        -- Use CC:Tweaked's built-in pastebin command approach
-        -- This leverages the pastebin API without needing a key
-        -- by using the same endpoint the pastebin program uses
-        postData = "text=" .. urlEncode(fullContent)
-    end
-    
-    local url = config.pastebin_key 
-        and "https://pastebin.com/api/api_post.php"
-        or "https://pastebin.com/api/api_post.php"
-    
-    -- For keyless uploads, try the simpler approach
+    -- NOTE: Pastebin API requires a developer key. Without it, uploads will fail.
     if not config.pastebin_key then
-        -- Use the approach from CC:Tweaked's built-in pastebin program
-        local response, err = http.post(
-            "https://pastebin.com/api/api_post.php",
-            "api_dev_key=&api_option=paste&api_paste_code=" .. urlEncode(fullContent) ..
-            "&api_paste_name=" .. urlEncode(title)
-        )
-        
-        if not response then
-            return nil, "Upload failed: " .. (err or "unknown error")
-        end
-        
-        local result = response.readAll()
-        response.close()
-        
-        if result:match("^https?://pastebin.com/") then
-            return result, nil
-        else
-            return nil, "Pastebin error: " .. result
-        end
+        return nil, "Pastebin API key required (set pastebin_key in config/logger.cfg)"
     end
-    
-    local response, err = http.post(url, postData)
+
+    -- Pastebin size limit is 512 KB. Truncate if needed.
+    local maxBytes = 512 * 1024
+    if #fullContent > maxBytes then
+        local truncated = fullContent:sub(1, maxBytes - 200)
+        fullContent = truncated .. "\n\n[LOG TRUNCATED: exceeded Pastebin size limit]"
+    end
+
+    local postData = string.format(
+        "api_dev_key=%s&api_option=paste&api_paste_code=%s&api_paste_name=%s&api_paste_expire_date=1W",
+        urlEncode(config.pastebin_key),
+        urlEncode(fullContent),
+        urlEncode(title)
+    )
+
+    local response, err = http.post(
+        "https://pastebin.com/api/api_post.php",
+        postData,
+        { ["Content-Type"] = "application/x-www-form-urlencoded" }
+    )
     
     if not response then
         return nil, "Upload failed: " .. (err or "unknown error")

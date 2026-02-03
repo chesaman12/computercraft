@@ -265,7 +265,7 @@ Log levels guide:
 
 Config (config/logger.cfg):
 - discord_webhook: URL for Discord notifications (Pastebin links sent here)
-- pastebin_key: Optional API key for better Pastebin limits
+- pastebin_key: Required Pastebin API key for uploads
 ```
 
 **Example Prompt:**

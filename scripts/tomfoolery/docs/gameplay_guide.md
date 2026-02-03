@@ -352,7 +352,8 @@ min_level = debug
 # Print to terminal while logging
 echo = true
 
-# Optional: Pastebin API key for more features
+# Pastebin API key (required for uploads)
+# Get one at: https://pastebin.com/doc_api
 # pastebin_key = YOUR_API_KEY
 
 # Discord webhook - log URLs are automatically sent here
@@ -378,6 +379,15 @@ To set up Discord notifications:
     ```
     discord_webhook = https://discordapp.com/api/webhooks/...
     ```
+
+### Common Upload Errors
+
+If you see: `Upload failed: Unprocessable Entity`, it usually means:
+
+- **Missing or invalid Pastebin API key** (`pastebin_key` not set)
+- **Payload too large** (logs exceeded 512 KB)
+
+Set `pastebin_key` in `config/logger.cfg` and retry. Logs are auto-truncated if they exceed the size limit.
 
 ---
 

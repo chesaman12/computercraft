@@ -622,6 +622,13 @@ Configure `discord_webhook` in `config/logger.cfg` to automatically receive Past
 discord_webhook = https://discordapp.com/api/webhooks/YOUR_WEBHOOK_URL
 ```
 
+Pastebin uploads require `pastebin_key`:
+
+```lua
+-- config/logger.cfg
+pastebin_key = YOUR_API_KEY
+```
+
 ### Module Dependency Pattern
 
 Modules use dependency injection via `init()` functions:
