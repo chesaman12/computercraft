@@ -544,10 +544,71 @@ local function restockTorches()
     if not enableTorches then
         return true
     end
-    turtle.select(TORCH_SLOT)
-    turtle.suck(64)
-    turtle.select(1)
-    return getTorchCount() > 0
+
+    local function dropToChestFromEither(count)
+        turtle.drop(count)
+        if turtle.getItemCount(turtle.getSelectedSlot()) > 0 then
+            turnAround()
+            turtle.drop(count)
+            turnAround()
+        end
+    end
+
+    local function findTempSlot()
+        for slot = 1, 16 do
+            if not isReservedSlot(slot) and turtle.getItemCount(slot) == 0 then
+                return slot
+            end
+        end
+        return nil
+    end
+
+    local detail = turtle.getItemDetail(TORCH_SLOT)
+    if detail and not detail.name:lower():match("torch") then
+        turtle.select(TORCH_SLOT)
+        dropToChestFromEither()
+        turtle.select(1)
+        if turtle.getItemCount(TORCH_SLOT) > 0 then
+            logger.warn("Torch slot blocked by %s; cannot clear", detail.name)
+            return false
+        end
+    end
+
+    local tempSlot = findTempSlot()
+    if not tempSlot then
+        logger.warn("No empty slot available to restock torches")
+        return false
+    end
+
+    local function tryRestockFromFace()
+        for _ = 1, SINGLE_CHEST_CAPACITY do
+            turtle.select(tempSlot)
+            if not turtle.suck(1) then
+                return false
+            end
+            local pulled = turtle.getItemDetail(tempSlot)
+            if pulled and pulled.name:lower():match("torch") then
+                turtle.select(tempSlot)
+                turtle.transferTo(TORCH_SLOT)
+                turtle.select(TORCH_SLOT)
+                while turtle.suck(64) do end
+                turtle.select(1)
+                return true
+            else
+                turtle.select(tempSlot)
+                turtle.drop(1)
+            end
+        end
+        return false
+    end
+
+    if tryRestockFromFace() then
+        return getTorchCount() > 0
+    end
+    turnAround()
+    local ok = tryRestockFromFace()
+    turnAround()
+    return ok and getTorchCount() > 0
 end
 
 local function waitForResource(resource, checkFn, restockFn, reason)
