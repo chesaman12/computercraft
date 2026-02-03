@@ -96,6 +96,7 @@ local currentStep = 0
 -- Statistics tracking
 local moveCount = 0
 local turnCount = 0
+local oreCount = 0
 local startTime = 0
 local startFuel = 0
 local canReturnHome = true
@@ -166,37 +167,38 @@ end
 
 local function promptConfig()
     local config = applyDefaults()
-    local useDefaults = input.readYesNo("Use defaults? (y/n): ", true)
+    local useDefaults = input.readYesNo("Use defaults? [y]: ", true)
     if useDefaults then
         return config
     end
 
-    config.corridorLength = input.readNumber("Corridor length: ", config.corridorLength)
-    print("Tip: odd corridor counts return home faster; even counts end farther away.")
-    config.corridorCount = input.readNumber("Corridor count: ", config.corridorCount)
-    config.gap = input.readNumber("Gap between corridors: ", config.gap)
-    config.mineRight = input.readYesNo("Mine right? (y/n): ", config.mineRight)
-    config.showLogs = input.readYesNo("Show log output? (y/n): ", config.showLogs)
-    config.enableTorches = input.readYesNo("Enable torches? (y/n): ", config.enableTorches)
+    config.corridorLength = input.readNumber("Tunnel length [" .. config.corridorLength .. "]: ", config.corridorLength)
+    print("Tip: odd tunnel counts return home faster; even counts end farther away.")
+    config.corridorCount = input.readNumber("Number of tunnels [" .. config.corridorCount .. "]: ", config.corridorCount)
+    config.gap = input.readNumber("Gap between tunnels [" .. config.gap .. "]: ", config.gap)
+    config.mineRight = input.readYesNo("Mine right? [" .. (config.mineRight and "y" or "n") .. "]: ", config.mineRight)
+    config.showLogs = input.readYesNo("Show log output? [" .. (config.showLogs and "y" or "n") .. "]: ", config.showLogs)
+    config.enableTorches = input.readYesNo("Enable torches? [" .. (config.enableTorches and "y" or "n") .. "]: ", config.enableTorches)
     if config.enableTorches then
-        config.torchInterval = input.readNumber("Torch interval: ", config.torchInterval)
+        config.torchInterval = input.readNumber("Torch interval [" .. config.torchInterval .. "]: ", config.torchInterval)
     else
         config.torchInterval = 0
     end
-    config.fuelReserve = input.readNumber("Fuel reserve: ", config.fuelReserve)
-    config.invThreshold = input.readNumber("Return at empty slots: ", config.invThreshold)
-    config.enableOreMining = input.readYesNo("Enable ore mining? (y/n): ", config.enableOreMining)
-    config.enablePokeholes = input.readYesNo("Enable pokeholes? (y/n): ", config.enablePokeholes)
+    config.fuelReserve = input.readNumber("Fuel reserve [" .. config.fuelReserve .. "]: ", config.fuelReserve)
+    config.invThreshold = input.readNumber("Return at empty slots [" .. config.invThreshold .. "]: ", config.invThreshold)
+    config.enableOreMining = input.readYesNo("Enable ore mining? [" .. (config.enableOreMining and "y" or "n") .. "]: ", config.enableOreMining)
+    config.enablePokeholes = input.readYesNo("Enable pokeholes? [" .. (config.enablePokeholes and "y" or "n") .. "]: ", config.enablePokeholes)
     if config.enablePokeholes then
-        config.pokeholeInterval = input.readNumber("Pokehole interval: ", config.pokeholeInterval)
+        config.pokeholeInterval = input.readNumber("Pokehole interval [" .. config.pokeholeInterval .. "]: ", config.pokeholeInterval)
     else
         config.pokeholeInterval = 0
     end
-    config.returnHome = input.readYesNo("Return to start when done? (y/n): ", config.returnHome)
-    config.fullMode = input.readChoice(
-        "On full inventory: 1) pause, 2) chest + resume, 3) drop junk: ",
-        1, 3, config.fullMode
-    )
+    config.returnHome = input.readYesNo("Return to start when done? [" .. (config.returnHome and "y" or "n") .. "]: ", config.returnHome)
+    print("When inventory full:")
+    print("  1) Pause and wait for manual clear")
+    print("  2) Return home, deposit in chest, resume")
+    print("  3) Drop junk only, keep mining")
+    config.fullMode = input.readChoice("Choose [" .. config.fullMode .. "]: ", 1, 3, config.fullMode)
     return config
 end
 
@@ -263,11 +265,19 @@ local function turnAround()
 end
 
 local function turnTo(targetDir)
-    if dir ~= targetDir then
-        logger.debug("Turning from %d to %d", dir, targetDir)
+    if dir == targetDir then
+        return
     end
-    while dir ~= targetDir do
+    logger.debug("Turning from %d to %d", dir, targetDir)
+    -- Calculate shortest turn direction (0-3 compass)
+    local diff = (targetDir - dir) % 4
+    if diff == 1 then
         turnRight()
+    elseif diff == 2 then
+        turnRight()
+        turnRight()
+    elseif diff == 3 then
+        turnLeft()
     end
 end
 
@@ -712,6 +722,7 @@ local function checkForwardOre(visited, mineFn)
         if ok and isOre(data.name) then
             logger.debug("Ore forward: %s", data.name)
             turtle.dig()
+            oreCount = oreCount + 1
             if moveForwardRaw() then
                 mineFn(visited)
                 moveBackSafe()
@@ -725,13 +736,13 @@ end
 local function mineVein(visited)
     visited[makeKey(posX, posY, posZ)] = true
 
-    -- Check each direction for ore; if found, recurse to mine that vein before checking others.
     -- Up
     if not visited[makeKey(posX, posY + 1, posZ)] then
         local ok, data = turtle.inspectUp()
         if ok and isOre(data.name) then
             logger.debug("Ore up: %s", data.name)
             turtle.digUp()
+            oreCount = oreCount + 1
             if moveUpSafe() then
                 mineVein(visited)
                 moveDownSafe()
@@ -745,6 +756,7 @@ local function mineVein(visited)
         if ok and isOre(data.name) then
             logger.debug("Ore down: %s", data.name)
             turtle.digDown()
+            oreCount = oreCount + 1
             if moveDownSafe() then
                 mineVein(visited)
                 moveUpSafe()
@@ -752,23 +764,12 @@ local function mineVein(visited)
         end
     end
 
-    -- Forward
-    checkForwardOre(visited, mineVein)
-
-    -- Left
-    turnLeft()
-    checkForwardOre(visited, mineVein)
-    turnRight()
-
-    -- Right
-    turnRight()
-    checkForwardOre(visited, mineVein)
-    turnLeft()
-
-    -- Back
-    turnAround()
-    checkForwardOre(visited, mineVein)
-    turnAround()
+    -- Check all 4 horizontal directions in a circle (4 turns instead of 8)
+    for i = 1, 4 do
+        checkForwardOre(visited, mineVein)
+        turnRight()
+    end
+    -- After 4 right turns, we're back to original facing
 end
 
 local function checkAndMineAdjacent()
@@ -855,11 +856,11 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
     local sideDir = mineRight and 1 or 3    -- +X or -X
     local backDir = mineRight and 3 or 1    -- -X or +X
     
-    logger.debug("Mining symmetric grid: length=%d, corridors=%d, maxX=%d, right=%s", corridorLength, corridorCount, maxX, tostring(mineRight))
+    logger.info("Mining symmetric grid: length=%d, corridors=%d, maxX=%d, right=%s", corridorLength, corridorCount, maxX, tostring(mineRight))
     
     -- Phase 1: Mine the perimeter rectangle
     -- Bottom bar: mine from x=0 to x=maxX (or -maxX) at z=0
-    logger.debug("Phase 1a: Mining bottom bar at z=0")
+    logger.info("Phase 1a: Mining bottom bar (0 to %d)", maxX)
     turnTo(sideDir)
     for i = 1, maxX do
         if not mineForward(fullMode) then return false end
@@ -867,7 +868,7 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
     -- Now at (maxX, 0) or (-maxX, 0)
     
     -- Far corridor: mine from z=0 to z=corridorLength at x=maxX (or -maxX)
-    logger.debug("Phase 1b: Mining far corridor")
+    logger.info("Phase 1b: Mining far corridor at x=%d", posX)
     turnTo(0) -- face +Z
     for i = 1, corridorLength do
         if not mineForward(fullMode) then return false end
@@ -875,7 +876,7 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
     -- Now at (maxX, corridorLength) or (-maxX, corridorLength)
     
     -- Top bar: mine back to x=0 at z=corridorLength
-    logger.debug("Phase 1c: Mining top bar at z=%d", corridorLength)
+    logger.info("Phase 1c: Mining top bar at z=%d", corridorLength)
     turnTo(backDir)
     for i = 1, maxX do
         if not mineForward(fullMode) then return false end
@@ -883,16 +884,18 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
     -- Now at (0, corridorLength)
     
     -- Near corridor: mine from z=corridorLength to z=0 at x=0
-    logger.debug("Phase 1d: Mining near corridor at x=0")
+    logger.info("Phase 1d: Mining near corridor at x=0")
     turnTo(2) -- face -Z
     for i = 1, corridorLength do
         if not mineForward(fullMode) then return false end
     end
     -- Now back at (0, 0), facing -Z
     
+    logger.info("Phase 1 complete: perimeter done, ores=%d moves=%d turns=%d", oreCount, moveCount, turnCount)
+    
     -- Phase 2: Fill in interior corridors
     if corridorCount > 2 then
-        logger.debug("Phase 2: Mining %d interior corridors", corridorCount - 2)
+        logger.info("Phase 2: Mining %d interior corridors", corridorCount - 2)
         for corridor = 2, corridorCount - 1 do
             -- Navigate to corridor start via bottom bar (already mined)
             turnTo(sideDir)
@@ -901,7 +904,7 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
             end
             
             -- Mine this corridor upward
-            logger.debug("Mining interior corridor %d", corridor)
+            logger.info("Mining interior corridor %d/%d at x=%d", corridor - 1, corridorCount - 2, posX)
             turnTo(0) -- face +Z
             for i = 1, corridorLength do
                 if not mineForward(fullMode) then return false end
@@ -916,8 +919,10 @@ local function mineSymmetricGrid(corridorLength, corridorCount, gap, fullMode, m
                 end
             end
         end
+        logger.info("Phase 2 complete: interior corridors done, ores=%d moves=%d turns=%d", oreCount, moveCount, turnCount)
     end
     
+    logger.info("All mining complete at x=%d y=%d z=%d, total ores=%d", posX, posY, posZ, oreCount)
     return true
 end
 
@@ -1021,8 +1026,8 @@ local function main()
     print("")
     print("=== Mining Statistics ===")
     print(string.format("Time: %dm %ds", elapsedMin, remainingSec))
-    print(string.format("Movements: %d", moveCount))
-    print(string.format("Turns: %d", turnCount))
+    print(string.format("Movements: %d  Turns: %d", moveCount, turnCount))
+    print(string.format("Ores mined: %d", oreCount))
     if fuelUsed > 0 then
         print(string.format("Fuel used: %d", fuelUsed))
     end
@@ -1032,7 +1037,7 @@ local function main()
         print("Efficiency: n/a")
     end
     
-    logger.info("Stats: time=%ds moves=%d turns=%d fuel=%d", elapsedSec, moveCount, turnCount, fuelUsed)
+    logger.info("Stats: time=%ds moves=%d turns=%d ores=%d fuel=%d", elapsedSec, moveCount, turnCount, oreCount, fuelUsed)
     
     if aborted then
         logger.warn("Strip mining aborted at step %d/%d", currentStep, totalSteps)
