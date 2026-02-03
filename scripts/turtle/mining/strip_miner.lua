@@ -23,16 +23,16 @@ local DEFAULT_TORCH_INTERVAL = 8
 local DEFAULT_FUEL_RESERVE = 200
 local DEFAULT_INV_THRESHOLD = 1
 local DEFAULT_POKEHOLE_INTERVAL = 4
-local DEFAULT_CORRIDOR_LENGTH = 30
-local DEFAULT_CORRIDOR_COUNT = 10
+local DEFAULT_CORRIDOR_LENGTH = 20
+local DEFAULT_CORRIDOR_COUNT = 5
 local DEFAULT_GAP = 3
 local DEFAULT_MINE_RIGHT = true
-local DEFAULT_SHOW_LOGS = true
+local DEFAULT_SHOW_LOGS = false
 local DEFAULT_ENABLE_TORCHES = true
 local DEFAULT_ENABLE_ORE_MINING = true
 local DEFAULT_ENABLE_POKEHOLES = true
 local DEFAULT_RETURN_HOME = true
-local DEFAULT_FULL_MODE = 1
+local DEFAULT_FULL_MODE = 2
 local SINGLE_CHEST_CAPACITY = 27
 local RESTOCK_FUEL_BUFFER = 10
 
@@ -776,7 +776,41 @@ local function checkAndMineAdjacent()
     if not enableOreMining then
         return
     end
-    mineVein({})
+    -- Check up/down/forward without turning (0 turns)
+    -- Side ore is detected by pokeholes, so we skip side checks here
+    local visited = {}
+    visited[makeKey(posX, posY, posZ)] = true
+
+    -- Up
+    if not visited[makeKey(posX, posY + 1, posZ)] then
+        local ok, data = turtle.inspectUp()
+        if ok and isOre(data.name) then
+            logger.debug("Ore up: %s", data.name)
+            turtle.digUp()
+            oreCount = oreCount + 1
+            if moveUpSafe() then
+                mineVein(visited)
+                moveDownSafe()
+            end
+        end
+    end
+
+    -- Down
+    if not visited[makeKey(posX, posY - 1, posZ)] then
+        local ok, data = turtle.inspectDown()
+        if ok and isOre(data.name) then
+            logger.debug("Ore down: %s", data.name)
+            turtle.digDown()
+            oreCount = oreCount + 1
+            if moveDownSafe() then
+                mineVein(visited)
+                moveUpSafe()
+            end
+        end
+    end
+
+    -- Forward only (no turn needed)
+    checkForwardOre(visited, mineVein)
 end
 
 local function pokeholeSide(turnIn, turnOut)
