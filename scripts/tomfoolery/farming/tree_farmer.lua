@@ -360,6 +360,21 @@ local function runHarvestLoop()
             core.stats.harvestPasses, logs, planted))
         print(string.format("Fuel: %s, Saplings: %d",
             tostring(turtle.getFuelLevel()), core.countSaplings()))
+
+        -- Upload log after each pass (before waiting)
+        if uploadOnComplete then
+            local passStats = {
+                harvestPasses = core.stats.harvestPasses,
+                treesHarvested = core.stats.treesHarvested,
+                logsCollected = core.stats.logsCollected,
+                saplingsPlanted = core.stats.saplingsPlanted,
+                fuel = turtle.getFuelLevel(),
+                lastPassLogs = logs,
+                lastPassPlanted = planted,
+            }
+            local title = string.format("Tree Farmer - Pass #%d", core.stats.harvestPasses)
+            logger.uploadAndPrint(title, passStats)
+        end
         
         -- Wait before next pass
         if core.state.running then
