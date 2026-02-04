@@ -286,16 +286,10 @@ local function runHarvestLoop()
             end
         end
         
-        -- Harvest all trees
-        local logs = harvest.harvestAllTrees()
+        -- Harvest all trees AND replant empty positions in one pass
+        local logs, planted = harvest.harvestAllTrees(true)  -- true = replant
         
-        -- Return home after harvest
-        harvest.returnHome()
-        
-        -- Replant missing saplings
-        local planted = planting.replantAllTrees()
-        
-        -- Return home after replanting
+        -- Return home after the pass
         harvest.returnHome()
         
         -- Deposit if inventory is getting full

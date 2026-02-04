@@ -193,12 +193,19 @@ end
 -- GRID CALCULATIONS
 -- ============================================
 
+-- Grid layout (trees to front-right of home):
+--   - Home is at (0, 0), turtle starts facing NORTH (into farm)
+--   - Trees at X = 1, 1+spacing, 1+spacing*2, ...
+--   - Trees at Z = 2, 2+rowSpacing, 2+rowSpacing*2, ...
+--   - Paths run at Z = 1, 1+rowSpacing, etc. (between tree rows)
+
 --- Calculate total farm size in blocks
 -- @return number, number Width and depth in blocks
 function M.getFarmSize()
-    local gridSpacing = M.config.spacing + 1  -- +1 for the tree itself
-    local width = (M.config.width - 1) * gridSpacing
-    local depth = (M.config.depth - 1) * gridSpacing
+    local spacing = M.config.spacing + 1  -- Distance between tree centers
+    local rowSpacing = spacing + 1        -- Distance between tree rows (includes path)
+    local width = 1 + (M.config.width - 1) * spacing  -- First tree at X=1
+    local depth = 2 + (M.config.depth - 1) * rowSpacing  -- First tree at Z=2
     return width, depth
 end
 
@@ -208,13 +215,25 @@ function M.getTotalTrees()
     return M.config.width * M.config.depth
 end
 
---- Convert grid position to relative world offset
+--- Convert grid position to world coordinates for the tree
 -- @param gridX number Grid X (0-indexed)
 -- @param gridZ number Grid Z (0-indexed)
--- @return number, number Relative X and Z offset from home
+-- @return number, number World X and Z for the tree
 function M.gridToWorld(gridX, gridZ)
-    local gridSpacing = M.config.spacing + 1
-    return gridX * gridSpacing, gridZ * gridSpacing
+    local spacing = M.config.spacing + 1
+    local rowSpacing = spacing + 1
+    local treeX = 1 + gridX * spacing
+    local treeZ = 2 + gridZ * rowSpacing
+    return treeX, treeZ
+end
+
+--- Get the path position to stand when checking a tree
+-- @param gridX number Grid X (0-indexed)
+-- @param gridZ number Grid Z (0-indexed)
+-- @return number, number Path X and Z (one block north of tree)
+function M.getCheckPosition(gridX, gridZ)
+    local treeX, treeZ = M.gridToWorld(gridX, gridZ)
+    return treeX, treeZ - 1  -- Stand north of tree
 end
 
 --- Estimate fuel needed for one complete harvest pass
@@ -223,14 +242,14 @@ function M.estimateFuelCost()
     local width, depth = M.getFarmSize()
     local totalTrees = M.getTotalTrees()
     
-    -- Movement to visit all trees (serpentine path)
-    local horizontalMoves = width + depth * M.config.width
+    -- Movement to visit all trees
+    local horizontalMoves = width * M.config.depth + depth * 2
     
     -- Vertical moves (up and down for each tree)
     local verticalMoves = totalTrees * M.config.maxTreeHeight * 2
     
     -- Return trip buffer
-    local returnBuffer = width + depth
+    local returnBuffer = width + depth + 20
     
     return horizontalMoves + verticalMoves + returnBuffer + 50  -- +50 safety margin
 end
