@@ -154,7 +154,7 @@ local function validateStartup()
             print("WARNING: May not have enough fuel")
             
             -- Try to refuel
-            fuel.refuelFromInventory()
+            fuel.autoRefuel(fuelNeeded)
             currentFuel = turtle.getFuelLevel()
             
             if currentFuel < core.config.minFuel then
@@ -277,7 +277,7 @@ local function runHarvestLoop()
         local currentFuel = turtle.getFuelLevel()
         if currentFuel ~= "unlimited" and currentFuel < core.config.minFuel then
             logger.warn("Low fuel, attempting refuel")
-            fuel.refuelFromInventory()
+            fuel.autoRefuel(core.config.minFuel)
             
             if turtle.getFuelLevel() < core.config.minFuel then
                 logger.error("Cannot continue - out of fuel")
