@@ -81,10 +81,15 @@ function M.cutTreeUp()
     local heightClimbed = 0
     local maxHeight = core.config.maxTreeHeight + 3
     
+    local startPos = movement.getPosition()
+    logInfo("cutTreeUp: Starting at (%d,%d,%d), maxHeight=%d", 
+        startPos.x, startPos.y, startPos.z, maxHeight)
+    
     -- Dig the base log in front of us
     if turtle.detect() then
         local success, blockData = turtle.inspect()
         if success and core.isLog(blockData) then
+            logDebug("Digging base log: %s", blockData.name)
             turtle.dig()
             logsMined = logsMined + 1
         end
@@ -92,9 +97,12 @@ function M.cutTreeUp()
     
     -- Move into the tree's position
     if not movement.forward() then
-        logDebug("Could not move into tree position")
+        logWarn("Could not move into tree position")
         return logsMined, 0
     end
+    
+    local treePos = movement.getPosition()
+    logDebug("Moved into tree position: (%d,%d,%d)", treePos.x, treePos.y, treePos.z)
     
     -- Remember our facing so we can restore it
     local originalFacing = movement.getFacing()
@@ -108,6 +116,7 @@ function M.cutTreeUp()
         local success, blockData = turtle.inspectUp()
         if success then
             if core.isLog(blockData) then
+                logDebug("Height %d: Log above - %s", heightClimbed, blockData.name)
                 turtle.digUp()
                 logsMined = logsMined + 1
                 foundLogThisLevel = true
@@ -120,6 +129,7 @@ function M.cutTreeUp()
         for turn = 0, 3 do
             success, blockData = turtle.inspect()
             if success and core.isLog(blockData) then
+                logDebug("Height %d: Branch log - %s", heightClimbed, blockData.name)
                 turtle.dig()
                 logsMined = logsMined + 1
                 foundLogThisLevel = true
@@ -137,7 +147,7 @@ function M.cutTreeUp()
         end
         
         if not movement.up() then
-            logDebug("Cannot move up, stuck at height %d", heightClimbed)
+            logWarn("Cannot move up, stuck at height %d", heightClimbed)
             break
         end
         heightClimbed = heightClimbed + 1
@@ -153,6 +163,10 @@ function M.cutTreeUp()
     -- Restore original facing
     movement.turnTo(originalFacing)
     
+    local endPos = movement.getPosition()
+    logInfo("cutTreeUp complete: %d logs, climbed %d, now at (%d,%d,%d)", 
+        logsMined, heightClimbed, endPos.x, endPos.y, endPos.z)
+    
     return logsMined, heightClimbed
 end
 
@@ -161,6 +175,8 @@ end
 function M.returnToGround()
     local movement = core.libs.movement
     local pos = movement.getPosition()
+    
+    logDebug("returnToGround: Starting at Y=%d", pos.y)
     
     while pos.y > 0 do
         if turtle.detectDown() then
@@ -200,30 +216,38 @@ end
 -- @return number logs, boolean hadContent
 function M.harvestTree()
     local movement = core.libs.movement
+    local pos = movement.getPosition()
+    local facing = movement.getFacing()
+    
+    logInfo("harvestTree: pos=(%d,%d,%d) facing=%d", pos.x, pos.y, pos.z, facing)
     
     -- Check what's in front
     local success, blockData = turtle.inspect()
     
     if not success then
         -- Nothing there - empty position
-        logDebug("Empty position")
+        logInfo("harvestTree: Empty position (nothing in front)")
         return 0, false
     end
     
+    logInfo("harvestTree: Block in front = %s", blockData.name)
+    
     if core.isSapling(blockData) then
-        logDebug("Sapling present - tree not grown")
+        logInfo("harvestTree: Sapling present - tree not grown yet")
         return 0, true  -- Has content, don't replant
     end
     
     if not core.isLog(blockData) then
-        logDebug("Non-tree block: %s", blockData.name)
+        logInfo("harvestTree: Non-tree block, skipping: %s", blockData.name)
         return 0, true  -- Something there, don't replant
     end
     
     -- It's a log! Harvest the tree
-    logInfo("Found tree - harvesting")
+    logInfo("harvestTree: LOG DETECTED - beginning harvest")
     
     local logs, height = M.cutTreeUp()
+    logInfo("harvestTree: cutTreeUp returned %d logs, %d height", logs, height)
+    
     M.returnToGround()
     M.backToPath()
     M.collectDrops()
@@ -231,7 +255,8 @@ function M.harvestTree()
     if logs > 0 then
         core.stats.treesHarvested = core.stats.treesHarvested + 1
         core.stats.logsCollected = core.stats.logsCollected + logs
-        logInfo("Harvested: %d logs from %d height", logs, height)
+        logInfo("harvestTree: COMPLETE - %d logs from %d height (total: %d trees, %d logs)",
+            logs, height, core.stats.treesHarvested, core.stats.logsCollected)
     end
     
     return logs, false  -- Harvested, so now empty - can replant
@@ -273,7 +298,9 @@ end
 -- @return number pathZ The Z coordinate on the corridor
 function M.getCorridorZ(gridZ)
     local rowSpacing = core.config.spacing + 1
-    return 1 + gridZ * rowSpacing  -- First row at Z=1, then spaced apart
+    local corridorZ = 1 + gridZ * rowSpacing  -- First row at Z=1, then spaced apart
+    logDebug("getCorridorZ(gridZ=%d) = %d (rowSpacing=%d)", gridZ, corridorZ, rowSpacing)
+    return corridorZ
 end
 
 --- Get the tree's X position within a row
@@ -281,7 +308,9 @@ end
 -- @return number treeX The X coordinate of the tree
 function M.getTreeX(gridX)
     local spacing = core.config.spacing + 1
-    return 1 + gridX * spacing  -- First tree at X=1, then spaced apart
+    local treeX = 1 + gridX * spacing  -- First tree at X=1, then spaced apart
+    logDebug("getTreeX(gridX=%d) = %d (spacing=%d)", gridX, treeX, spacing)
+    return treeX
 end
 
 --- Navigate along the X=0 corridor to a specific Z position
@@ -290,8 +319,12 @@ function M.navigateCorridorTo(targetZ)
     local movement = core.libs.movement
     local pos = movement.getPosition()
     
+    logInfo("navigateCorridorTo: target Z=%d | current pos=(%d,%d,%d)", 
+        targetZ, pos.x, pos.y, pos.z)
+    
     -- First ensure we're on the corridor (X=0)
     if pos.x ~= 0 then
+        logInfo("Not on corridor (X=%d), moving to X=0", pos.x)
         -- Need to get back to corridor - go west
         if pos.x > 0 then
             movement.turnTo(3)  -- West
@@ -304,22 +337,33 @@ function M.navigateCorridorTo(targetZ)
                 movement.forward(true)
             end
         end
+        pos = movement.getPosition()
+        logDebug("Now at X=%d", pos.x)
     end
     
     -- Now move along corridor to target Z
     pos = movement.getPosition()
     local dz = targetZ - pos.z
+    logDebug("Moving along corridor: dz=%d (from Z=%d to Z=%d)", dz, pos.z, targetZ)
+    
     if dz > 0 then
         movement.turnTo(2)  -- South (into farm)
         for i = 1, dz do
-            movement.forward(true)
+            local ok = movement.forward(true)
+            pos = movement.getPosition()
+            logDebug("Corridor step %d/%d south: moved=%s, Z=%d", i, dz, tostring(ok), pos.z)
         end
     elseif dz < 0 then
         movement.turnTo(0)  -- North (toward home)
         for i = 1, -dz do
-            movement.forward(true)
+            local ok = movement.forward(true)
+            pos = movement.getPosition()
+            logDebug("Corridor step %d/%d north: moved=%s, Z=%d", i, -dz, tostring(ok), pos.z)
         end
     end
+    
+    pos = movement.getPosition()
+    logInfo("navigateCorridorTo complete: now at (%d,%d,%d)", pos.x, pos.y, pos.z)
 end
 
 --- Walk east to a tree position, check/harvest/plant, then return
@@ -333,7 +377,14 @@ function M.visitTree(treeX, doHarvest, doReplant)
     local logs = 0
     local planted = false
     
+    local startPos = movement.getPosition()
+    local startFacing = movement.getFacing()
+    logInfo("visitTree: treeX=%d, harvest=%s, replant=%s | startPos=(%d,%d,%d) facing=%d",
+        treeX, tostring(doHarvest), tostring(doReplant), 
+        startPos.x, startPos.y, startPos.z, startFacing)
+    
     -- Face east
+    logDebug("Turning to face EAST (1)")
     movement.turnTo(1)  -- East
     
     -- Walk to one block BEFORE the tree position (X = treeX - 1)
@@ -343,53 +394,96 @@ function M.visitTree(treeX, doHarvest, doReplant)
     
     local pos = movement.getPosition()
     local stepsNeeded = targetX - pos.x
+    logDebug("Need to walk %d steps east (pos.x=%d, targetX=%d)", stepsNeeded, pos.x, targetX)
     
     for i = 1, stepsNeeded do
-        if not movement.forward(true) then
-            logWarn("Blocked walking to tree at X=%d", treeX)
+        local moveOk = movement.forward(true)
+        pos = movement.getPosition()
+        logDebug("Step %d/%d: moved=%s, now at (%d,%d,%d)", 
+            i, stepsNeeded, tostring(moveOk), pos.x, pos.y, pos.z)
+        if not moveOk then
+            logWarn("Blocked walking to tree at X=%d on step %d", treeX, i)
         end
     end
     
     -- Now we're at X = treeX-1 (or X=0 if treeX=1), facing east
     -- The tree/sapling position is directly in front of us at X = treeX
+    pos = movement.getPosition()
+    local facing = movement.getFacing()
+    logInfo("At tree approach position: (%d,%d,%d) facing=%d, tree should be in front at X=%d",
+        pos.x, pos.y, pos.z, facing, treeX)
     
     -- Check what's in front
     local hasBlock, blockData = turtle.inspect()
+    if hasBlock then
+        logInfo("Block in front: %s", blockData.name)
+    else
+        logInfo("No block in front (air/empty)")
+    end
+    
+    -- Also check what's below to understand terrain
+    local hasGround, groundData = turtle.inspectDown()
+    if hasGround then
+        logDebug("Ground below: %s", groundData.name)
+    else
+        logDebug("Nothing below (hovering?)")
+    end
     
     if doHarvest and hasBlock and core.isLog(blockData) then
         -- There's a tree! Harvest it
+        logInfo("TREE DETECTED - Harvesting")
         local harvestLogs, hasContent = M.harvestTree()
         logs = harvestLogs
+        logInfo("Harvested %d logs", logs)
         
         -- After harvesting, the spot is empty - replant
         if doReplant then
+            logInfo("Attempting replant after harvest")
             if M.plantSapling() then
                 planted = true
+                logInfo("Replant SUCCESS")
+            else
+                logWarn("Replant FAILED after harvest")
             end
         end
     elseif hasBlock and core.isSapling(blockData) then
         -- Sapling already there - skip
-        logDebug("Sapling already present at X=%d", treeX)
+        logInfo("Sapling already present: %s", blockData.name)
         planted = true  -- Consider it planted already
     elseif not hasBlock then
         -- Empty space - plant if requested
         if doReplant then
-            logDebug("Empty spot at X=%d, planting...", treeX)
+            logInfo("Empty spot at X=%d, attempting to plant sapling...", treeX)
             if M.plantSapling() then
                 planted = true
+                logInfo("Plant SUCCESS at X=%d", treeX)
+            else
+                logWarn("Plant FAILED at X=%d (empty spot)", treeX)
             end
+        else
+            logDebug("Empty spot but replant=false, skipping")
         end
     elseif hasBlock then
         -- Some other block (not log, not sapling)
-        logDebug("Unknown block at X=%d: %s", treeX, blockData.name)
+        logWarn("Unknown/unexpected block at X=%d: %s", treeX, blockData.name)
     end
     
     -- Walk back to corridor (X=0)
+    logDebug("Returning to corridor (X=0)")
     movement.turnTo(3)  -- West
     pos = movement.getPosition()
-    for i = 1, pos.x do
-        movement.forward(true)
+    local stepsBack = pos.x
+    logDebug("Walking %d steps west from X=%d", stepsBack, pos.x)
+    for i = 1, stepsBack do
+        local moveOk = movement.forward(true)
+        pos = movement.getPosition()
+        logDebug("Return step %d/%d: moved=%s, now at (%d,%d,%d)", 
+            i, stepsBack, tostring(moveOk), pos.x, pos.y, pos.z)
     end
+    
+    pos = movement.getPosition()
+    logInfo("visitTree complete: logs=%d, planted=%s, final pos=(%d,%d,%d)",
+        logs, tostring(planted), pos.x, pos.y, pos.z)
     
     return logs, planted
 end
@@ -422,18 +516,25 @@ function M.returnHome()
     local movement = core.libs.movement
     local pos = movement.getPosition()
     
-    logDebug("Returning home from (%d, %d, %d)", pos.x, pos.y, pos.z)
+    logInfo("returnHome: Starting from (%d, %d, %d) facing=%d", 
+        pos.x, pos.y, pos.z, movement.getFacing())
     
     -- First get to ground level
+    if pos.y ~= 0 then
+        logInfo("Not at ground level (Y=%d), descending...", pos.y)
+    end
     M.returnToGround()
     
     -- Navigate via corridor to home
+    logInfo("Navigating to corridor Z=0")
     M.navigateCorridorTo(0)
     
     -- Face north (original direction)
     movement.turnTo(0)
     
-    logDebug("Arrived home")
+    pos = movement.getPosition()
+    logInfo("returnHome complete: now at (%d, %d, %d) facing=%d", 
+        pos.x, pos.y, pos.z, movement.getFacing())
 end
 
 -- ============================================
@@ -449,10 +550,26 @@ function M.harvestAllTrees(doReplant)
     local planted = 0
     
     core.state.phase = "harvesting"
-    logInfo("Starting harvest pass #%d", core.stats.harvestPasses + 1)
+    local passNum = core.stats.harvestPasses + 1
+    
+    logInfo("========================================")
+    logInfo("HARVEST PASS #%d STARTING", passNum)
+    logInfo("========================================")
+    logInfo("Grid: %d x %d trees (width x depth)", core.config.width, core.config.depth)
+    logInfo("Spacing: %d blocks between trees", core.config.spacing)
+    logInfo("Replant mode: %s", tostring(doReplant))
+    
+    local startPos = movement.getPosition()
+    local startFacing = movement.getFacing()
+    logInfo("Start position: (%d,%d,%d) facing=%d", 
+        startPos.x, startPos.y, startPos.z, startFacing)
+    logInfo("Fuel at start: %s", tostring(turtle.getFuelLevel()))
+    logInfo("Saplings at start: %d", core.countSaplings())
     
     -- Visit each row
     for z = 0, core.config.depth - 1 do
+        logInfo("--- Row Z=%d (grid row %d/%d) ---", z, z+1, core.config.depth)
+        
         -- Navigate to this row on the corridor
         local corridorZ = M.getCorridorZ(z)
         M.navigateCorridorTo(corridorZ)
@@ -463,9 +580,14 @@ function M.harvestAllTrees(doReplant)
             core.state.currentZ = z
             
             local treeX = M.getTreeX(x)
+            logInfo("Tree [%d,%d]: grid(%d,%d) -> world treeX=%d", x, z, x, z, treeX)
+            
             local logs, didPlant = M.visitTree(treeX, true, doReplant)
             totalLogs = totalLogs + logs
             if didPlant then planted = planted + 1 end
+            
+            logInfo("Tree [%d,%d] result: logs=%d, planted=%s (totals: logs=%d, planted=%d)",
+                x, z, logs, tostring(didPlant), totalLogs, planted)
             
             -- Check inventory
             if core.isInventoryFull() then
@@ -476,6 +598,8 @@ function M.harvestAllTrees(doReplant)
             
             sleep(0.05)
         end
+        
+        logInfo("Row Z=%d complete", z)
     end
     
     core.stats.harvestPasses = core.stats.harvestPasses + 1
@@ -483,7 +607,11 @@ function M.harvestAllTrees(doReplant)
     
     -- Consolidate saplings
     local saplings = core.consolidateSaplings()
-    logInfo("Pass complete: %d logs, %d planted, %d saplings", totalLogs, planted, saplings)
+    logInfo("========================================")
+    logInfo("HARVEST PASS COMPLETE")
+    logInfo("========================================")
+    logInfo("Total logs: %d, Total planted: %d, Saplings in inventory: %d", totalLogs, planted, saplings)
+    logInfo("Fuel remaining: %s", tostring(turtle.getFuelLevel()))
     
     return totalLogs, planted
 end
@@ -498,66 +626,139 @@ function M.selectSaplings()
     local treeInfo = core.getTreeInfo()
     local targetSapling = treeInfo.sapling
     
-    logDebug("Looking for sapling: %s", targetSapling)
+    logInfo("selectSaplings: Looking for '%s'", targetSapling)
     
-    -- Check all slots for saplings
+    -- Log full inventory state
+    logInfo("=== INVENTORY SCAN ===")
+    local totalSaplings = 0
+    local saplingSlots = {}
+    
     for slot = 1, 16 do
         local item = turtle.getItemDetail(slot)
         if item then
-            logDebug("Slot %d: %s x%d", slot, item.name, item.count)
-            
-            -- Check for exact match OR any sapling (fallback)
-            if item.name == targetSapling or item.name:match("sapling") then
-                turtle.select(slot)
-                logDebug("Selected slot %d with %s", slot, item.name)
-                return true
+            logDebug("  Slot %02d: %s x%d", slot, item.name, item.count)
+            if item.name == targetSapling then
+                totalSaplings = totalSaplings + item.count
+                table.insert(saplingSlots, {slot=slot, count=item.count, exact=true})
+            elseif item.name:match("sapling") then
+                table.insert(saplingSlots, {slot=slot, count=item.count, exact=false, name=item.name})
             end
+        else
+            -- Empty slot
         end
     end
     
-    logWarn("No saplings found in inventory")
+    logInfo("Found %d target saplings (%s) in %d slots", 
+        totalSaplings, targetSapling, #saplingSlots)
+    
+    -- Try exact match first
+    for _, slotInfo in ipairs(saplingSlots) do
+        if slotInfo.exact then
+            turtle.select(slotInfo.slot)
+            logInfo("SELECTED slot %d: %s x%d (exact match)", 
+                slotInfo.slot, targetSapling, slotInfo.count)
+            return true
+        end
+    end
+    
+    -- Fallback to any sapling
+    for _, slotInfo in ipairs(saplingSlots) do
+        if not slotInfo.exact then
+            turtle.select(slotInfo.slot)
+            logWarn("SELECTED slot %d: %s x%d (FALLBACK - not target type!)", 
+                slotInfo.slot, slotInfo.name, slotInfo.count)
+            return true
+        end
+    end
+    
+    logWarn("NO SAPLINGS FOUND - inventory has 0 saplings of any type")
     return false
 end
 
 --- Plant a sapling at current facing direction
 -- @return boolean Success
 function M.plantSapling()
+    local movement = core.libs.movement
+    local pos = movement.getPosition()
+    local facing = movement.getFacing()
+    
+    logInfo("=== PLANT SAPLING ATTEMPT ===")
+    logInfo("Position: (%d, %d, %d), Facing: %d", pos.x, pos.y, pos.z, facing)
+    
+    -- Try to select saplings
     if not M.selectSaplings() then
-        logWarn("No saplings available")
+        logWarn("PLANT FAILED: No saplings available in inventory")
         return false
     end
+    
+    -- Log what we have selected
+    local slot = turtle.getSelectedSlot()
+    local item = turtle.getItemDetail(slot)
+    if not item then
+        logWarn("PLANT FAILED: Selected slot %d is empty (race condition?)", slot)
+        return false
+    end
+    logInfo("Selected: slot %d = %s x%d", slot, item.name, item.count)
     
     -- Check what's in front before placing
     local hasBlock, blockData = turtle.inspect()
     if hasBlock then
-        logDebug("Cannot place - block in front: %s", blockData.name)
+        logWarn("PLANT FAILED: Block already in front: %s", blockData.name)
         return false
     end
+    logInfo("Front is clear (no block)")
     
-    -- Check what we have selected
-    local slot = turtle.getSelectedSlot()
-    local item = turtle.getItemDetail(slot)
-    if not item then
-        logWarn("No item in selected slot %d", slot)
-        return false
-    end
-    logDebug("Attempting to place %s from slot %d", item.name, slot)
+    -- Check what's below us (turtle's ground)
+    local hasGroundBelow, groundBelowData = turtle.inspectDown()
+    local ourGround = hasGroundBelow and groundBelowData.name or "air/void"
+    logInfo("Ground below US: %s", ourGround)
     
-    -- Try to place
+    -- Check what's in front and below (where sapling would be placed)
+    -- We can't directly inspect this, but we can infer from Y level
+    logInfo("Turtle Y level: %d (sapling will try to place at Y=%d in front)", pos.y, pos.y)
+    
+    -- Calculate where we expect to place
+    local dx = ({[0]=0, [1]=1, [2]=0, [3]=-1})[facing] or 0
+    local dz = ({[0]=-1, [1]=0, [2]=1, [3]=0})[facing] or 0
+    logInfo("Placing towards: direction=%d (dx=%d, dz=%d), target block=(%d, %d, %d)",
+        facing, dx, dz, pos.x + dx, pos.y, pos.z + dz)
+    
+    -- Attempt placement
+    logInfo("Calling turtle.place()...")
     local success, err = turtle.place()
+    
     if success then
         core.stats.saplingsPlanted = core.stats.saplingsPlanted + 1
-        logInfo("Planted sapling successfully")
+        logInfo("PLANT SUCCESS! Sapling placed. Total planted: %d", core.stats.saplingsPlanted)
+        
+        -- Verify placement
+        local verifyBlock, verifyData = turtle.inspect()
+        if verifyBlock then
+            logInfo("Verification: Block now in front = %s", verifyData.name)
+        else
+            logWarn("Verification FAILED: No block in front after placing?!")
+        end
+        
         return true
     else
-        -- Placement failed - check down to see terrain
-        local hasGround, groundData = turtle.inspectDown()
-        local groundInfo = hasGround and groundData.name or "nothing"
-        logWarn("Failed to place %s: %s (ground below us: %s)", 
-            item.name, tostring(err or "unknown"), groundInfo)
+        local errStr = tostring(err or "no error message")
+        logWarn("PLANT FAILED: turtle.place() returned false")
+        logWarn("  Error: %s", errStr)
+        logWarn("  Item: %s from slot %d", item.name, slot)
+        logWarn("  Position: (%d, %d, %d) facing %d", pos.x, pos.y, pos.z, facing)
         
-        -- Check if maybe we need to go down one block?
-        -- Trees need to be placed on dirt/grass at ground level
+        -- Additional diagnostics
+        local remainingCount = turtle.getItemCount(slot)
+        logWarn("  Remaining in slot: %d", remainingCount)
+        
+        -- Check if there's now a block (maybe something weird happened)
+        local postBlock, postData = turtle.inspect()
+        if postBlock then
+            logWarn("  Post-attempt block in front: %s", postData.name)
+        else
+            logWarn("  Post-attempt: Still no block in front")
+        end
+        
         return false
     end
 end
@@ -569,17 +770,32 @@ function M.setupFarm()
     local planted = 0
     
     core.state.phase = "planting"
-    logInfo("Setting up farm: %dx%d grid", core.config.width, core.config.depth)
+    
+    logInfo("========================================")
+    logInfo("FARM SETUP STARTING")
+    logInfo("========================================")
+    logInfo("Grid: %d x %d trees", core.config.width, core.config.depth)
+    logInfo("Spacing: %d blocks", core.config.spacing)
+    logInfo("Tree type: %s", core.config.treeType)
     
     local available = core.countSaplings()
     local needed = core.getTotalTrees()
+    
+    logInfo("Saplings available: %d", available)
+    logInfo("Saplings needed: %d", needed)
+    logInfo("Fuel: %s", tostring(turtle.getFuelLevel()))
     
     if available < needed then
         logWarn("Not enough saplings: have %d, need %d", available, needed)
     end
     
+    local startPos = movement.getPosition()
+    logInfo("Start position: (%d,%d,%d)", startPos.x, startPos.y, startPos.z)
+    
     -- Visit each row via corridor
     for z = 0, core.config.depth - 1 do
+        logInfo("--- Setup Row Z=%d (%d/%d) ---", z, z+1, core.config.depth)
+        
         local corridorZ = M.getCorridorZ(z)
         M.navigateCorridorTo(corridorZ)
         
@@ -587,15 +803,22 @@ function M.setupFarm()
         for x = 0, core.config.width - 1 do
             local treeX = M.getTreeX(x)
             
+            logInfo("Setup tree [%d,%d]: treeX=%d", x, z, treeX)
+            
             -- visitTree with harvest=false, replant=true will plant if empty
             local logs, didPlant = M.visitTree(treeX, false, true)
             
             if didPlant then
                 planted = planted + 1
-                logDebug("Planted at grid (%d, %d)", x, z)
+                logInfo("Planted at grid (%d, %d) - total planted: %d", x, z, planted)
+            else
+                logWarn("Failed to plant at grid (%d, %d)", x, z)
             end
             
-            if core.countSaplings() == 0 then
+            local remaining = core.countSaplings()
+            logDebug("Saplings remaining: %d", remaining)
+            
+            if remaining == 0 then
                 logWarn("Ran out of saplings!")
                 break
             end
@@ -610,7 +833,12 @@ function M.setupFarm()
     
     M.returnHome()
     core.state.phase = "idle"
-    logInfo("Farm setup complete: %d saplings planted", planted)
+    
+    logInfo("========================================")
+    logInfo("FARM SETUP COMPLETE")
+    logInfo("========================================")
+    logInfo("Total saplings planted: %d / %d needed", planted, needed)
+    logInfo("Fuel remaining: %s", tostring(turtle.getFuelLevel()))
     
     return planted
 end

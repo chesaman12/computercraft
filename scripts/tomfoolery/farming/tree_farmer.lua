@@ -447,7 +447,40 @@ if not ok then
     logger.error("Fatal error: %s", tostring(err))
     printError("Fatal error: " .. tostring(err))
     
+    -- Log position at crash for debugging
+    local pos = movement.getPosition()
+    local facing = movement.getFacing()
+    logger.error("Position at crash: (%d, %d, %d) facing=%d", pos.x, pos.y, pos.z, facing)
+    logger.error("Fuel at crash: %s", tostring(turtle.getFuelLevel()))
+    
+    -- Log inventory at crash
+    logger.error("=== INVENTORY AT CRASH ===")
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        if item then
+            logger.error("  Slot %02d: %s x%d", slot, item.name, item.count)
+        end
+    end
+    
+    -- Try to return home
+    print("Attempting to return home...")
+    logger.info("Attempting emergency return home")
+    local homeOk = pcall(function()
+        harvest.returnHome()
+    end)
+    if homeOk then
+        logger.info("Emergency return home succeeded")
+    else
+        logger.error("Emergency return home FAILED")
+    end
+    
     if uploadOnComplete then
-        logger.finalize({ error = tostring(err) }, "Tree Farmer CRASH")
+        logger.finalize({ 
+            error = tostring(err),
+            posX = pos.x,
+            posY = pos.y,
+            posZ = pos.z,
+            facing = facing,
+        }, "Tree Farmer CRASH")
     end
 end
