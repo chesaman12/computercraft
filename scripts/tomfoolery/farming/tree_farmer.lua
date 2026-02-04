@@ -65,7 +65,7 @@ local tArgs = { ... }
 
 local uploadOnComplete = false
 local setupMode = false
-local treeType = "birch"
+local treeType = "oak"  -- Default to oak
 
 -- Parse flags
 local cleanArgs = {}

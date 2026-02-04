@@ -353,35 +353,35 @@ function M.visitTree(treeX, doHarvest, doReplant)
     -- Now we're at X = treeX-1 (or X=0 if treeX=1), facing east
     -- The tree/sapling position is directly in front of us at X = treeX
     
-    if doHarvest then
-        local success, blockData = turtle.inspect()
+    -- Check what's in front
+    local hasBlock, blockData = turtle.inspect()
+    
+    if doHarvest and hasBlock and core.isLog(blockData) then
+        -- There's a tree! Harvest it
+        local harvestLogs, hasContent = M.harvestTree()
+        logs = harvestLogs
         
-        if success and core.isLog(blockData) then
-            -- There's a tree! Harvest it
-            local harvestLogs, hasContent = M.harvestTree()
-            logs = harvestLogs
-            
-            -- After harvesting, the spot is empty - replant
-            if doReplant then
-                if M.plantSapling() then
-                    planted = true
-                end
+        -- After harvesting, the spot is empty - replant
+        if doReplant then
+            if M.plantSapling() then
+                planted = true
             end
-        elseif success and core.isSapling(blockData) then
-            -- Sapling already there - skip
-            logDebug("Sapling already present at X=%d", treeX)
-        elseif not success then
-            -- Empty space - plant if requested
-            if doReplant then
-                logDebug("Empty spot at X=%d, planting...", treeX)
-                if M.plantSapling() then
-                    planted = true
-                end
-            end
-        else
-            -- Some other block (not log, not sapling)
-            logDebug("Unknown block at X=%d: %s", treeX, blockData.name)
         end
+    elseif hasBlock and core.isSapling(blockData) then
+        -- Sapling already there - skip
+        logDebug("Sapling already present at X=%d", treeX)
+        planted = true  -- Consider it planted already
+    elseif not hasBlock then
+        -- Empty space - plant if requested
+        if doReplant then
+            logDebug("Empty spot at X=%d, planting...", treeX)
+            if M.plantSapling() then
+                planted = true
+            end
+        end
+    elseif hasBlock then
+        -- Some other block (not log, not sapling)
+        logDebug("Unknown block at X=%d: %s", treeX, blockData.name)
     end
     
     -- Walk back to corridor (X=0)
@@ -496,25 +496,26 @@ end
 -- @return boolean True if saplings available
 function M.selectSaplings()
     local treeInfo = core.getTreeInfo()
+    local targetSapling = treeInfo.sapling
     
-    -- Check slot 1 first
-    turtle.select(1)
-    local item = turtle.getItemDetail(1)
-    if item and item.name == treeInfo.sapling then
-        return true
-    end
+    logDebug("Looking for sapling: %s", targetSapling)
     
-    -- Search other slots and transfer to slot 1
-    for slot = 2, 16 do
-        item = turtle.getItemDetail(slot)
-        if item and item.name == treeInfo.sapling then
-            turtle.select(slot)
-            turtle.transferTo(1)
-            turtle.select(1)
-            return true
+    -- Check all slots for saplings
+    for slot = 1, 16 do
+        local item = turtle.getItemDetail(slot)
+        if item then
+            logDebug("Slot %d: %s x%d", slot, item.name, item.count)
+            
+            -- Check for exact match OR any sapling (fallback)
+            if item.name == targetSapling or item.name:match("sapling") then
+                turtle.select(slot)
+                logDebug("Selected slot %d with %s", slot, item.name)
+                return true
+            end
         end
     end
     
+    logWarn("No saplings found in inventory")
     return false
 end
 
@@ -526,12 +527,37 @@ function M.plantSapling()
         return false
     end
     
-    if turtle.place() then
+    -- Check what's in front before placing
+    local hasBlock, blockData = turtle.inspect()
+    if hasBlock then
+        logDebug("Cannot place - block in front: %s", blockData.name)
+        return false
+    end
+    
+    -- Check what we have selected
+    local slot = turtle.getSelectedSlot()
+    local item = turtle.getItemDetail(slot)
+    if not item then
+        logWarn("No item in selected slot %d", slot)
+        return false
+    end
+    logDebug("Attempting to place %s from slot %d", item.name, slot)
+    
+    -- Try to place
+    local success, err = turtle.place()
+    if success then
         core.stats.saplingsPlanted = core.stats.saplingsPlanted + 1
-        logDebug("Planted sapling")
+        logInfo("Planted sapling successfully")
         return true
     else
-        logDebug("Failed to place sapling")
+        -- Placement failed - check down to see terrain
+        local hasGround, groundData = turtle.inspectDown()
+        local groundInfo = hasGround and groundData.name or "nothing"
+        logWarn("Failed to place %s: %s (ground below us: %s)", 
+            item.name, tostring(err or "unknown"), groundInfo)
+        
+        -- Check if maybe we need to go down one block?
+        -- Trees need to be placed on dirt/grass at ground level
         return false
     end
 end
@@ -561,36 +587,12 @@ function M.setupFarm()
         for x = 0, core.config.width - 1 do
             local treeX = M.getTreeX(x)
             
-            -- Use visitTree with harvest=false, replant=true
+            -- visitTree with harvest=false, replant=true will plant if empty
             local logs, didPlant = M.visitTree(treeX, false, true)
             
-            -- But visitTree only plants if empty and doHarvest is true
-            -- So let's just directly plant here
-            movement.turnTo(1)  -- East
-            
-            -- Walk to one block before tree
-            local pos = movement.getPosition()
-            local targetX = treeX - 1
-            if targetX < 0 then targetX = 0 end
-            local stepsNeeded = targetX - pos.x
-            
-            for i = 1, stepsNeeded do
-                movement.forward(true)
-            end
-            
-            -- Plant sapling forward
-            if M.plantSapling() then
+            if didPlant then
                 planted = planted + 1
                 logDebug("Planted at grid (%d, %d)", x, z)
-            else
-                logWarn("Failed to plant at (%d, %d)", x, z)
-            end
-            
-            -- Walk back to corridor
-            movement.turnTo(3)  -- West
-            pos = movement.getPosition()
-            for i = 1, pos.x do
-                movement.forward(true)
             end
             
             if core.countSaplings() == 0 then
