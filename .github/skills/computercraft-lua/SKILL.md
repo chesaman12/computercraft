@@ -542,6 +542,84 @@ for depth = 1, maxDepth do
 end
 ```
 
+#### Tree Farming Patterns
+
+```lua
+-- Tree type detection
+local TREE_TYPES = {
+    birch = { log = "minecraft:birch_log", sapling = "minecraft:birch_sapling" },
+    oak = { log = "minecraft:oak_log", sapling = "minecraft:oak_sapling" },
+    spruce = { log = "minecraft:spruce_log", sapling = "minecraft:spruce_sapling" },
+}
+
+local function isLog(blockData, treeType)
+    return blockData and blockData.name == TREE_TYPES[treeType].log
+end
+
+-- Harvest tree by cutting upward
+local function harvestTree()
+    local logs = 0
+
+    -- Cut base and move into tree position
+    turtle.dig()
+    turtle.forward()
+
+    -- Cut upward until no more logs
+    while true do
+        local success, blockData = turtle.inspectUp()
+        if success and isLog(blockData, "birch") then
+            turtle.digUp()
+            turtle.up()
+            logs = logs + 1
+        else
+            break
+        end
+    end
+
+    -- Return to ground
+    while not turtle.detectDown() do
+        turtle.down()
+    end
+    turtle.back()
+
+    return logs
+end
+
+-- Collect drops (saplings, sticks, apples)
+local function collectDrops()
+    while turtle.suck() do end
+    while turtle.suckDown() do end
+end
+
+-- Plant sapling if position is empty
+local function plantSapling()
+    if not turtle.detect() then  -- Nothing in front
+        turtle.select(1)  -- Saplings in slot 1
+        return turtle.place()
+    end
+    return false
+end
+
+-- Grid traversal for farm
+local function traverseFarm(width, depth, spacing, callback)
+    local gridSpacing = spacing + 1
+
+    for z = 0, depth - 1 do
+        local goingRight = (z % 2 == 0)
+
+        for x = 0, width - 1 do
+            local actualX = goingRight and x or (width - 1 - x)
+
+            -- Move to position and call handler
+            -- (navigation code would go here)
+            callback(actualX, z)
+
+            sleep(0.1)  -- Yield to prevent timeout
+        end
+    end
+end
+```
+
 ## Resources
 
 - Official Wiki: https://tweaked.cc/
@@ -569,8 +647,14 @@ tomfoolery/
 │   ├── home.lua      # Home navigation, deposits, restocking
 │   ├── tunnel.lua    # Tunnel step functions, ore checking
 │   └── patterns.lua  # Mining patterns (perimeter, branches)
+├── farmer/           # Tree farmer modules
+│   ├── core.lua      # Config, state, tree type definitions
+│   ├── harvest.lua   # Tree cutting, drop collection
+│   └── planting.lua  # Sapling placement, replanting
 ├── mining/           # Mining entry point scripts
-│   └── smart_miner.lua  # Thin orchestrator
+│   └── smart_miner.lua  # Branch mining orchestrator
+├── farming/          # Farming entry point scripts
+│   └── tree_farmer.lua  # Tree farm orchestrator
 ├── config/           # Runtime configuration
 │   ├── ores.cfg      # Ore block list
 │   ├── junk.cfg      # Junk block list

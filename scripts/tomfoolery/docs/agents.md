@@ -336,6 +336,69 @@ Requirements for mining scripts:
 
 ---
 
+### Tree Farmer Agent
+
+**Name:** `tree-farmer-agent`
+
+**Combines:** Movement, Inventory, Fuel
+
+**Purpose:** Create automated tree farming solutions.
+
+**Architecture:**
+
+The tree farmer uses a modular architecture with focused modules:
+
+| Module        | Path                      | Responsibility                              |
+| ------------- | ------------------------- | ------------------------------------------- |
+| `core`        | `farmer/core.lua`         | Configuration, state, stats, tree detection |
+| `harvest`     | `farmer/harvest.lua`      | Tree cutting, drop collection, navigation   |
+| `planting`    | `farmer/planting.lua`     | Sapling placement, replanting logic         |
+| `tree_farmer` | `farming/tree_farmer.lua` | Thin orchestrator, entry point              |
+
+**Module Initialization Pattern:**
+
+```lua
+-- Main script initializes modules with dependencies
+local core = require("farmer.core")
+local harvest = require("farmer.harvest")
+local planting = require("farmer.planting")
+
+core.init({ movement = movement, inventory = inventory, fuel = fuel })
+harvest.init(core)
+planting.init(core, harvest)
+```
+
+**Instructions:**
+
+```
+You are building a tree farming automation system. The architecture uses:
+- farmer/core.lua: Shared config, stats, tree type definitions, grid calculations
+- farmer/harvest.lua: Tree detection, cutting upward, returning to ground
+- farmer/planting.lua: Sapling selection, placement, replanting passes
+- common/logger.lua: Logging and Pastebin upload
+
+Requirements for tree farming scripts:
+1. Support configurable grid dimensions (width x depth)
+2. Use optimal spacing for tree type (2 blocks for same-type)
+3. Harvest by cutting trunk upward, then descending
+4. Collect dropped saplings to maintain self-sufficiency
+5. Replant missing saplings after each harvest pass
+6. Return home to deposit logs when inventory full
+7. Wait between harvest passes for tree growth (2+ minutes)
+8. Track statistics: trees harvested, logs collected, saplings used
+9. **Log all significant events using common/logger.lua**
+10. **Support --upload flag for automatic log upload**
+
+Tree type information:
+- Birch: Best for automation (uniform 5-7 height), 2-block spacing
+- Oak: Small variant good, but can grow large/branching
+- Spruce: Tall (7+ blocks), 2-block spacing for small variant
+- Jungle: Low sapling drop rate, harder to sustain
+- Dark Oak: Requires 2x2 sapling placement (not recommended)
+```
+
+---
+
 ### Base Builder Agent
 
 **Name:** `base-builder-agent`

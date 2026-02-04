@@ -9,7 +9,9 @@ This guide explains how to set up and use the turtle bots in-game. Each bot has 
 1. [General Setup](#general-setup)
 2. [Installing Scripts](#installing-scripts)
 3. [Smart Miner](#smart-miner)
-4. [Troubleshooting](#troubleshooting)
+4. [Tree Farmer](#tree-farmer)
+5. [Logging and Log Uploads](#logging-and-log-uploads)
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -286,6 +288,160 @@ thermal:nickel_ore
 4. **Empty the chest** periodically if doing long mining sessions
 5. **Keep torches stocked** in slot 16 to prevent mob spawns
 6. **Use --upload flag** to get a log URL for debugging issues
+
+---
+
+## Tree Farmer
+
+**Script:** `farming/tree_farmer.lua`
+
+An automated tree farming turtle that plants, harvests, and replants saplings in a configurable grid layout.
+
+### Setup Instructions
+
+#### Step 1: Choose a Location
+
+1. Find or create a flat area for your tree farm
+2. Ensure adequate vertical clearance (at least 10 blocks for birch/oak)
+3. Trees need light to grow - outdoors is best, or add torches
+
+#### Step 2: Position the Turtle
+
+1. Place the turtle at one corner of your farm area
+2. The turtle should face into the farm (the direction trees will be planted)
+
+```
+     [Chest] [Turtle] → → → (farming area)
+```
+
+#### Step 3: Place the Deposit Chest
+
+1. Place a **chest directly behind the turtle**
+2. The turtle returns here to deposit logs when inventory fills up
+
+#### Step 4: Load Saplings and Fuel
+
+1. Open the turtle (right-click)
+2. Place **saplings in slot 1** - at least enough for your grid (e.g., 25 for 5x5)
+3. Add **fuel items** (coal, charcoal, wood) to any other slot
+4. Recommended: 64+ saplings for initial setup
+
+#### Step 5: Run the Script
+
+**IMPORTANT:** Run scripts from the root installation directory.
+
+```
+farming/tree_farmer <width> <depth> [tree_type] [--setup] [--upload]
+```
+
+**Parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| width | 5 | Number of trees in X direction |
+| depth | 5 | Number of trees in Z direction |
+| tree_type | birch | Tree type: birch, oak, spruce, jungle, acacia |
+| --setup | off | Initial setup mode - plants all saplings |
+| --upload | off | Upload log to Pastebin when complete |
+
+**Examples:**
+
+```
+farming/tree_farmer 5 5 --setup           -- 5x5 birch farm, initial setup
+farming/tree_farmer 7 7 oak --setup       -- 7x7 oak farm, initial setup
+farming/tree_farmer 5 5 --upload          -- Harvest existing 5x5 farm
+farming/tree_farmer 4 6 birch --upload    -- 4x6 birch farm with logging
+```
+
+### First-Time Setup
+
+For a new tree farm, use the `--setup` flag:
+
+```
+farming/tree_farmer 5 5 birch --setup
+```
+
+This will:
+
+1. Navigate to each grid position
+2. Plant a sapling at each location
+3. Wait for trees to start growing
+4. Begin the harvest loop
+
+### Behavior
+
+Once running, the turtle will continuously:
+
+1. **Traverse the farm grid** in a serpentine pattern
+2. **Detect grown trees** by checking for log blocks
+3. **Harvest trees** by cutting upward through the trunk
+4. **Collect drops** (saplings, sticks, apples from oak)
+5. **Return to ground level** after each tree
+6. **Replant missing saplings** at empty positions
+7. **Deposit logs** when inventory is nearly full
+8. **Wait between passes** for trees to regrow (2 minutes default)
+
+### Grid Layout
+
+The turtle plants trees with optimal spacing for the tree type:
+
+```
+     [T] - - - [T] - - - [T]     T = Tree position
+      |         |         |      - = Empty space (3 blocks for birch)
+      |         |         |
+     [T] - - - [T] - - - [T]     Grid moves left-to-right,
+      |         |         |      then advances one row
+      |         |         |
+     [T] - - - [T] - - - [T]
+```
+
+**Spacing by tree type:**
+| Tree Type | Spacing | Notes |
+|-----------|---------|-------|
+| Birch | 3 blocks | Best for automation - uniform height |
+| Oak | 3 blocks | May grow large variants (harder to harvest) |
+| Spruce | 3 blocks | Tall trees, consistent |
+| Jungle | 3 blocks | Low sapling return, may need external supply |
+| Acacia | 4 blocks | Irregular shape, needs more space |
+
+### Recommended Tree Types
+
+**Best: Birch**
+
+- Most uniform height (5-7 blocks)
+- Consistent sapling drops
+- Easy to fully harvest from ground
+- Fast growth
+
+**Good: Oak (Small)**
+
+- Compact when small
+- Can drop apples
+- Risk: May grow large/branching variant
+
+**Avoid: Dark Oak**
+
+- Requires 2x2 sapling placement
+- Low sapling return rate
+- Not currently supported by this script
+
+### Self-Sustaining Operation
+
+The turtle collects saplings from leaf decay. To maintain sustainability:
+
+1. **Birch/Spruce**: Usually self-sustaining (4+ saplings per tree average)
+2. **Oak**: Usually self-sustaining, plus drops apples
+3. **Jungle**: Often needs external sapling supply (low drop rate)
+
+The script warns if sapling count drops below the minimum threshold (10 by default).
+
+### Tips for Best Results
+
+1. **Use birch trees** for most reliable automation
+2. **Start with plenty of saplings** - at least 2x your grid size
+3. **Check fuel regularly** - tree farming uses less fuel than mining but still needs it
+4. **Empty the chest** periodically for large farms
+5. **Outdoor farms** grow faster (more light)
+6. **Add torches** around the farm to prevent mob spawns at night
 
 ---
 

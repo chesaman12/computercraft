@@ -41,6 +41,11 @@ local files = {
     { path = "miner/tunnel.lua",     required = true },
     { path = "miner/patterns.lua",   required = true },
     
+    -- Farmer modules (tree_farmer dependencies)
+    { path = "farmer/core.lua",      required = true },
+    { path = "farmer/harvest.lua",   required = true },
+    { path = "farmer/planting.lua",  required = true },
+    
     -- Configuration files
     { path = "config/ores.cfg",      required = true },
     { path = "config/junk.cfg",      required = true },
@@ -48,6 +53,9 @@ local files = {
     
     -- Mining scripts
     { path = "mining/smart_miner.lua", required = true },
+    
+    -- Farming scripts
+    { path = "farming/tree_farmer.lua", required = true },
     
     -- Utility scripts
     { path = "upload_log.lua",       required = true },
@@ -57,8 +65,10 @@ local files = {
 local directories = {
     "common",
     "miner",
+    "farmer",
     "config", 
     "mining",
+    "farming",
 }
 
 -- ============================================
@@ -210,11 +220,12 @@ local function install()
     print("")
     print("Installation complete!")
     print("")
-    print("To run the smart miner:")
-    print("  cd mining")
-    print("  smart_miner 50")
+    print("Available scripts:")
+    print("  mining/smart_miner 50      - Branch mining")
+    print("  farming/tree_farmer 5 5    - Tree farm")
     print("")
     print("Edit config/ores.cfg to add modded ores.")
+    print("Edit config/logger.cfg to set Pastebin key.")
     
     return true
 end
