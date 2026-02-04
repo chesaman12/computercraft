@@ -38,7 +38,7 @@ M.config = {
     minFuel = 200,
     
     -- Tree type (for detection)
-    treeType = "birch",  -- birch, oak, spruce, jungle, acacia, dark_oak
+    treeType = "oak",  -- oak, birch, spruce, jungle, acacia, dark_oak
 }
 
 --- Statistics tracking

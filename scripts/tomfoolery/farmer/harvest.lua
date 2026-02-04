@@ -322,42 +322,71 @@ function M.navigateCorridorTo(targetZ)
     end
 end
 
---- Walk east to a tree position and return
+--- Walk east to a tree position, check/harvest/plant, then return
 -- Turtle must be on corridor (X=0) at the correct Z
 -- @param treeX number The X position of the tree
--- @param doHarvest boolean Whether to harvest/plant
+-- @param doHarvest boolean Whether to harvest
+-- @param doReplant boolean Whether to replant empty spots
 -- @return number logs, boolean planted
 function M.visitTree(treeX, doHarvest, doReplant)
     local movement = core.libs.movement
     local logs = 0
     local planted = false
     
-    -- Face east and walk to one block before tree
+    -- Face east
     movement.turnTo(1)  -- East
-    local walkDistance = treeX - 1  -- Stop 1 block before tree (at X = treeX-1)
     
-    for i = 1, walkDistance do
+    -- Walk to one block BEFORE the tree position (X = treeX - 1)
+    -- So we can interact with the tree/sapling in front of us
+    local targetX = treeX - 1
+    if targetX < 0 then targetX = 0 end
+    
+    local pos = movement.getPosition()
+    local stepsNeeded = targetX - pos.x
+    
+    for i = 1, stepsNeeded do
         if not movement.forward(true) then
             logWarn("Blocked walking to tree at X=%d", treeX)
         end
     end
     
-    -- Now we're at X = treeX-1, facing east, tree is in front
+    -- Now we're at X = treeX-1 (or X=0 if treeX=1), facing east
+    -- The tree/sapling position is directly in front of us at X = treeX
+    
     if doHarvest then
-        local harvestLogs, hasContent = M.harvestTree()
-        logs = harvestLogs
+        local success, blockData = turtle.inspect()
         
-        -- Replant if empty and requested
-        if not hasContent and doReplant then
-            if M.plantSapling() then
-                planted = true
+        if success and core.isLog(blockData) then
+            -- There's a tree! Harvest it
+            local harvestLogs, hasContent = M.harvestTree()
+            logs = harvestLogs
+            
+            -- After harvesting, the spot is empty - replant
+            if doReplant then
+                if M.plantSapling() then
+                    planted = true
+                end
             end
+        elseif success and core.isSapling(blockData) then
+            -- Sapling already there - skip
+            logDebug("Sapling already present at X=%d", treeX)
+        elseif not success then
+            -- Empty space - plant if requested
+            if doReplant then
+                logDebug("Empty spot at X=%d, planting...", treeX)
+                if M.plantSapling() then
+                    planted = true
+                end
+            end
+        else
+            -- Some other block (not log, not sapling)
+            logDebug("Unknown block at X=%d: %s", treeX, blockData.name)
         end
     end
     
     -- Walk back to corridor (X=0)
     movement.turnTo(3)  -- West
-    local pos = movement.getPosition()
+    pos = movement.getPosition()
     for i = 1, pos.x do
         movement.forward(true)
     end
@@ -528,35 +557,44 @@ function M.setupFarm()
         local corridorZ = M.getCorridorZ(z)
         M.navigateCorridorTo(corridorZ)
         
-        -- Plant each tree in this row
+        -- Plant each tree in this row using visitTree
         for x = 0, core.config.width - 1 do
             local treeX = M.getTreeX(x)
             
-            -- Walk to tree position (but don't harvest, just plant)
-            local movement = core.libs.movement
-            movement.turnTo(1)  -- East
-            local walkDistance = treeX - 1
+            -- Use visitTree with harvest=false, replant=true
+            local logs, didPlant = M.visitTree(treeX, false, true)
             
-            for i = 1, walkDistance do
+            -- But visitTree only plants if empty and doHarvest is true
+            -- So let's just directly plant here
+            movement.turnTo(1)  -- East
+            
+            -- Walk to one block before tree
+            local pos = movement.getPosition()
+            local targetX = treeX - 1
+            if targetX < 0 then targetX = 0 end
+            local stepsNeeded = targetX - pos.x
+            
+            for i = 1, stepsNeeded do
                 movement.forward(true)
             end
             
-            -- Plant sapling
+            -- Plant sapling forward
             if M.plantSapling() then
                 planted = planted + 1
                 logDebug("Planted at grid (%d, %d)", x, z)
             else
-                logWarn("Ran out of saplings at (%d, %d)", x, z)
+                logWarn("Failed to plant at (%d, %d)", x, z)
             end
             
             -- Walk back to corridor
             movement.turnTo(3)  -- West
-            local pos = movement.getPosition()
+            pos = movement.getPosition()
             for i = 1, pos.x do
                 movement.forward(true)
             end
             
             if core.countSaplings() == 0 then
+                logWarn("Ran out of saplings!")
                 break
             end
             
