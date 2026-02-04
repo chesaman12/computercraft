@@ -1,25 +1,30 @@
 --- Tree Farmer Harvest Module
 -- Handles tree detection, cutting, navigation, and item collection
 -- 
--- GRID LAYOUT (trees to front-right of home):
---   - Turtle starts at [H] facing NORTH (into the farm)
---   - Trees are planted in a grid to the FRONT and RIGHT of home
---   - Turtle walks along X=0 column (safe corridor), turns EAST to access trees
+-- GRID LAYOUT (corridor-based, avoids walking through saplings):
+--   - Turtle starts at [H] facing NORTH
+--   - Corridors are at Z=0, 3, 6 (spacing+1 apart)
+--   - Trees are at Z=1, 4, 7 (one block SOUTH of each corridor)
+--   - Turtle walks EAST along corridor, faces SOUTH to access trees
 --
---   Top-down view (turtle starts facing north/up):
+--   Top-down view (turtle starts at H facing north):
 --
---       X=0   X=1   X=4   X=7  ...
---   Z=0 [H]   
---   Z=1 [.]   [T]   [T]   [T]   ← Tree row 0
---   Z=4 [.]   [T]   [T]   [T]   ← Tree row 1 (spacing+1 apart)
---   Z=7 [.]   [T]   [T]   [T]   ← Tree row 2
---        ↑
---       Path column (turtle walks here)
+--       X=0   X=1   X=4   X=7
+--   Z=0 [H]→ [.]→ [.]→ [.]   ← Corridor 0 (turtle walks east-west here)
+--   Z=1      [T]   [T]   [T]   ← Tree row 0 (turtle faces SOUTH to access)
+--   Z=2                        
+--   Z=3 [.]→ [.]→ [.]→ [.]   ← Corridor 1
+--   Z=4      [T]   [T]   [T]   ← Tree row 1
+--   Z=5                        
+--   Z=6 [.]→ [.]→ [.]→ [.]   ← Corridor 2
+--   Z=7      [T]   [T]   [T]   ← Tree row 2
 --
 --   Trees at: X = 1, 1+spacing, 1+spacing*2, ...
 --             Z = 1, 1+rowSpacing, 1+rowSpacing*2, ...
+--   Corridors: Z = 0, rowSpacing, rowSpacing*2, ...
 --
--- Turtle walks north-south on X=0, turns east to check each tree in the row.
+-- The turtle NEVER walks through tree positions because trees are always
+-- 1 block south of the corridor it's walking on.
 -- 
 -- @module farmer.harvest
 
@@ -288,19 +293,42 @@ end
 -- NAVIGATION - SAFE CORRIDOR-BASED
 -- ============================================
 
--- The turtle walks along the X=0 corridor (north-south).
--- For each tree row, it faces EAST and walks to each tree position,
--- harvests/plants, then backs up along the same path.
--- This ensures it never walks through tree positions.
+-- GRID LAYOUT (fixed to avoid walking through saplings):
+--
+--   The turtle walks along corridors at Z=0, 3, 6 (north of tree rows)
+--   Trees are planted at Z=1, 4, 7 (one block south of corridors)
+--
+--   Top-down view:
+--       X=0   X=1   X=4   X=7
+--   Z=0 [H]→ [.]→ [.]→ [.]   ← Corridor 0 (turtle walks east-west here)
+--   Z=1      [T]   [T]   [T]   ← Tree row 0 (turtle faces SOUTH to access)
+--   Z=2                         
+--   Z=3 [.]→ [.]→ [.]→ [.]   ← Corridor 1
+--   Z=4      [T]   [T]   [T]   ← Tree row 1
+--
+--   Turtle walks EAST along corridor, then faces SOUTH to access each tree.
+--   This ensures the turtle NEVER walks through tree/sapling positions.
 
---- Get the corridor position (X=0) for a given tree row
+--- Get the corridor Z position for a given tree row
+-- Corridor is one block NORTH of the tree row
 -- @param gridZ number Tree row index (0 to depth-1)  
--- @return number pathZ The Z coordinate on the corridor
+-- @return number corridorZ The Z coordinate of the corridor
 function M.getCorridorZ(gridZ)
     local rowSpacing = core.config.spacing + 1
-    local corridorZ = 1 + gridZ * rowSpacing  -- First row at Z=1, then spaced apart
+    local corridorZ = gridZ * rowSpacing  -- Z=0, 3, 6, ... (north of trees)
     logDebug("getCorridorZ(gridZ=%d) = %d (rowSpacing=%d)", gridZ, corridorZ, rowSpacing)
     return corridorZ
+end
+
+--- Get the tree's Z position for a given row
+-- Tree is one block SOUTH of the corridor
+-- @param gridZ number Tree row index (0 to depth-1)
+-- @return number treeZ The Z coordinate of the tree
+function M.getTreeZ(gridZ)
+    local rowSpacing = core.config.spacing + 1
+    local treeZ = 1 + gridZ * rowSpacing  -- Z=1, 4, 7, ... (one south of corridor)
+    logDebug("getTreeZ(gridZ=%d) = %d (rowSpacing=%d)", gridZ, treeZ, rowSpacing)
+    return treeZ
 end
 
 --- Get the tree's X position within a row
@@ -366,8 +394,9 @@ function M.navigateCorridorTo(targetZ)
     logInfo("navigateCorridorTo complete: now at (%d,%d,%d)", pos.x, pos.y, pos.z)
 end
 
---- Walk east to a tree position, check/harvest/plant, then return
--- Turtle must be on corridor (X=0) at the correct Z
+--- Walk east to a tree position, face south, check/harvest/plant, then return
+-- Turtle must be on corridor (X=0) at the correct corridor Z
+-- Tree is 1 block SOUTH of the corridor
 -- @param treeX number The X position of the tree
 -- @param doHarvest boolean Whether to harvest
 -- @param doReplant boolean Whether to replant empty spots
@@ -383,18 +412,14 @@ function M.visitTree(treeX, doHarvest, doReplant)
         treeX, tostring(doHarvest), tostring(doReplant), 
         startPos.x, startPos.y, startPos.z, startFacing)
     
-    -- Face east
-    logDebug("Turning to face EAST (1)")
+    -- STEP 1: Walk EAST along corridor to the tree's X position
+    -- Corridor is at current Z, tree is at same X but Z+1 (south)
+    logDebug("Turning to face EAST (1) to walk along corridor")
     movement.turnTo(1)  -- East
     
-    -- Walk to one block BEFORE the tree position (X = treeX - 1)
-    -- So we can interact with the tree/sapling in front of us
-    local targetX = treeX - 1
-    if targetX < 0 then targetX = 0 end
-    
     local pos = movement.getPosition()
-    local stepsNeeded = targetX - pos.x
-    logDebug("Need to walk %d steps east (pos.x=%d, targetX=%d)", stepsNeeded, pos.x, targetX)
+    local stepsNeeded = treeX - pos.x
+    logDebug("Need to walk %d steps east (pos.x=%d, treeX=%d)", stepsNeeded, pos.x, treeX)
     
     for i = 1, stepsNeeded do
         local moveOk = movement.forward(true)
@@ -402,18 +427,23 @@ function M.visitTree(treeX, doHarvest, doReplant)
         logDebug("Step %d/%d: moved=%s, now at (%d,%d,%d)", 
             i, stepsNeeded, tostring(moveOk), pos.x, pos.y, pos.z)
         if not moveOk then
-            logWarn("Blocked walking to tree at X=%d on step %d", treeX, i)
+            logWarn("Blocked walking east at step %d", i)
         end
     end
     
-    -- Now we're at X = treeX-1 (or X=0 if treeX=1), facing east
-    -- The tree/sapling position is directly in front of us at X = treeX
+    -- STEP 2: Face SOUTH - the tree is 1 block south of us
+    logDebug("Turning to face SOUTH (2) to access tree")
+    movement.turnTo(2)  -- South
+    
+    -- Now we're at X=treeX, Z=corridorZ, facing south
+    -- The tree/sapling position is directly in front of us at Z=corridorZ+1
     pos = movement.getPosition()
     local facing = movement.getFacing()
-    logInfo("At tree approach position: (%d,%d,%d) facing=%d, tree should be in front at X=%d",
-        pos.x, pos.y, pos.z, facing, treeX)
+    local expectedTreeZ = pos.z + 1
+    logInfo("At tree approach: (%d,%d,%d) facing=%d, tree should be at (%d,%d,%d)",
+        pos.x, pos.y, pos.z, facing, treeX, pos.y, expectedTreeZ)
     
-    -- Check what's in front
+    -- Check what's in front (should be tree position)
     local hasBlock, blockData = turtle.inspect()
     if hasBlock then
         logInfo("Block in front: %s", blockData.name)
@@ -453,22 +483,22 @@ function M.visitTree(treeX, doHarvest, doReplant)
     elseif not hasBlock then
         -- Empty space - plant if requested
         if doReplant then
-            logInfo("Empty spot at X=%d, attempting to plant sapling...", treeX)
+            logInfo("Empty spot, attempting to plant sapling...")
             if M.plantSapling() then
                 planted = true
-                logInfo("Plant SUCCESS at X=%d", treeX)
+                logInfo("Plant SUCCESS")
             else
-                logWarn("Plant FAILED at X=%d (empty spot)", treeX)
+                logWarn("Plant FAILED (empty spot)")
             end
         else
             logDebug("Empty spot but replant=false, skipping")
         end
     elseif hasBlock then
         -- Some other block (not log, not sapling)
-        logWarn("Unknown/unexpected block at X=%d: %s", treeX, blockData.name)
+        logWarn("Unknown/unexpected block: %s", blockData.name)
     end
     
-    -- Walk back to corridor (X=0)
+    -- STEP 3: Walk back WEST to corridor (X=0)
     logDebug("Returning to corridor (X=0)")
     movement.turnTo(3)  -- West
     pos = movement.getPosition()
