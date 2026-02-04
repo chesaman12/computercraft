@@ -204,12 +204,16 @@ end
 -- CHEST OPERATIONS
 -- ============================================
 
---- Deposit items to chest behind turtle
-local function depositItems()
+--- Target number of saplings to keep (one stack)
+local TARGET_SAPLINGS = 64
+
+--- Deposit items to chest and restock saplings
+-- Handles double chests by depositing/withdrawing in a loop
+local function depositAndRestock()
     local movement = core.libs.movement
     local treeInfo = core.getTreeInfo()
     
-    logger.section("Depositing Items")
+    logger.section("Deposit & Restock")
     
     -- Turn to face chest
     movement.turnRight()
@@ -224,41 +228,97 @@ local function depositItems()
         return false
     end
     
-    -- Deposit everything except saplings (slot 1) and torches (slot 16)
+    -- STEP 1: Consolidate all saplings to slot 1 first
+    core.consolidateSaplings()
+    local currentSaplings = core.countSaplings()
+    logger.info("Current saplings before deposit: %d", currentSaplings)
+    
+    -- STEP 2: Deposit everything EXCEPT slot 1 (saplings) and slot 16 (torches)
     local deposited = 0
-    for slot = 1, 16 do
+    for slot = 2, 15 do
         local item = turtle.getItemDetail(slot)
         if item then
-            -- Keep saplings in slot 1 (minimum amount)
-            if slot == 1 and item.name == treeInfo.sapling then
-                -- Keep some saplings, deposit excess
-                if item.count > core.config.minSaplings then
-                    turtle.select(slot)
-                    local excess = item.count - core.config.minSaplings
-                    if turtle.drop(excess) then
-                        deposited = deposited + 1
-                    end
-                end
-            elseif slot == 16 then
-                -- Keep torches
-            else
-                -- Deposit everything else
-                turtle.select(slot)
-                if turtle.drop() then
-                    deposited = deposited + 1
-                end
+            turtle.select(slot)
+            if turtle.drop() then
+                deposited = deposited + 1
+                logger.debug("Deposited %s x%d from slot %d", item.name, item.count, slot)
             end
         end
     end
     
+    -- STEP 3: If we have excess saplings (more than target), deposit some
+    turtle.select(1)
+    local slot1 = turtle.getItemDetail(1)
+    if slot1 and slot1.name == treeInfo.sapling and slot1.count > TARGET_SAPLINGS then
+        local excess = slot1.count - TARGET_SAPLINGS
+        turtle.drop(excess)
+        logger.info("Deposited %d excess saplings", excess)
+    end
+    
+    -- STEP 4: If we need more saplings, try to withdraw from chest
+    currentSaplings = core.countSaplings()
+    if currentSaplings < TARGET_SAPLINGS then
+        local needed = TARGET_SAPLINGS - currentSaplings
+        logger.info("Need %d more saplings, searching chest...", needed)
+        
+        -- Suck items and check if they're saplings
+        -- This works with double chests - just keep sucking
+        local attempts = 0
+        local maxAttempts = 54 * 2  -- Double chest has 54 slots, may need multiple passes
+        
+        while currentSaplings < TARGET_SAPLINGS and attempts < maxAttempts do
+            -- Try to suck into an empty slot
+            local emptySlot = nil
+            for slot = 2, 15 do
+                if turtle.getItemCount(slot) == 0 then
+                    emptySlot = slot
+                    break
+                end
+            end
+            
+            if not emptySlot then
+                -- Inventory full, can't check more
+                break
+            end
+            
+            turtle.select(emptySlot)
+            if not turtle.suck(64) then
+                -- Chest is empty or we can't suck more
+                break
+            end
+            
+            local item = turtle.getItemDetail(emptySlot)
+            if item then
+                if item.name == treeInfo.sapling then
+                    -- Found saplings! Transfer to slot 1
+                    turtle.transferTo(1)
+                    currentSaplings = core.countSaplings()
+                    logger.debug("Found saplings, now have %d", currentSaplings)
+                else
+                    -- Not saplings, put back
+                    turtle.drop()
+                end
+            end
+            
+            attempts = attempts + 1
+        end
+        
+        logger.info("Restocked to %d saplings", currentSaplings)
+    end
+    
     turtle.select(1)
     
-    -- Turn back to original facing
+    -- Turn back to original facing (north)
     movement.turnRight()
     movement.turnRight()
     
-    logger.info("Deposited items from %d slots", deposited)
+    logger.info("Deposited items from %d slots, saplings: %d", deposited, core.countSaplings())
     return true
+end
+
+-- Alias for backward compatibility
+local function depositItems()
+    return depositAndRestock()
 end
 
 -- ============================================
@@ -292,10 +352,8 @@ local function runHarvestLoop()
         -- Return home after the pass
         harvest.returnHome()
         
-        -- Deposit if inventory is getting full
-        if core.isInventoryFull() then
-            depositItems()
-        end
+        -- Always deposit logs and restock saplings after each pass
+        depositAndRestock()
         
         -- Print status
         print(string.format("Pass #%d: %d logs, %d planted", 

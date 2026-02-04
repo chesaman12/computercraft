@@ -4,23 +4,22 @@
 -- GRID LAYOUT (trees to front-right of home):
 --   - Turtle starts at [H] facing NORTH (into the farm)
 --   - Trees are planted in a grid to the FRONT and RIGHT of home
---   - Turtle navigates BETWEEN tree rows (not through them)
+--   - Turtle walks along X=0 column (safe corridor), turns EAST to access trees
 --
---   Top-down view (turtle starts facing up/north):
+--   Top-down view (turtle starts facing north/up):
 --
---       Z=0  [H] ← Home (chest behind)
---            ↑ 
---       Z=1  [.] ← Path row 0
---       Z=2  [T] [T] [T]  ← Tree row 0 (trees at X=1,4,7...)
---       Z=3  [.] ← Path row 1
---       Z=4  [T] [T] [T]  ← Tree row 1
---       Z=5  [.] ← Path row 2
---            ...
+--       X=0   X=1   X=4   X=7  ...
+--   Z=0 [H]   
+--   Z=1 [.]   [T]   [T]   [T]   ← Tree row 0
+--   Z=4 [.]   [T]   [T]   [T]   ← Tree row 1 (spacing+1 apart)
+--   Z=7 [.]   [T]   [T]   [T]   ← Tree row 2
+--        ↑
+--       Path column (turtle walks here)
 --
---   X axis: 0 = home column, trees at X = 1, 1+spacing, 1+spacing*2, etc.
---   Z axis: 0 = home, paths at Z = 1,3,5..., trees at Z = 2,4,6...
+--   Trees at: X = 1, 1+spacing, 1+spacing*2, ...
+--             Z = 1, 1+rowSpacing, 1+rowSpacing*2, ...
 --
--- The turtle walks along paths and checks trees to its SOUTH (forward).
+-- Turtle walks north-south on X=0, turns east to check each tree in the row.
 -- 
 -- @module farmer.harvest
 
@@ -261,68 +260,130 @@ function M.collectDrops()
 end
 
 -- ============================================
--- NAVIGATION
+-- NAVIGATION - SAFE CORRIDOR-BASED
 -- ============================================
 
---- Calculate the path position to stand when checking a tree
--- @param gridX number Tree grid X index (0 to width-1)
--- @param gridZ number Tree grid Z index (0 to depth-1)
--- @return number pathX, number pathZ (world coordinates)
-function M.getTreeCheckPosition(gridX, gridZ)
-    local spacing = core.config.spacing + 1  -- Total grid cell size
-    
-    -- Trees are at:
-    --   X = 1 + gridX * spacing  (offset 1 from home, then spacing apart)
-    --   Z = 2 + gridZ * (spacing + 1)  (first tree row at Z=2, then path+tree alternating)
-    --
-    -- We stand one block NORTH of the tree (Z - 1)
-    local treeX = 1 + gridX * spacing
-    local treeZ = 2 + gridZ * (spacing + 1)
-    
-    return treeX, treeZ - 1  -- Stand north of tree
+-- The turtle walks along the X=0 corridor (north-south).
+-- For each tree row, it faces EAST and walks to each tree position,
+-- harvests/plants, then backs up along the same path.
+-- This ensures it never walks through tree positions.
+
+--- Get the corridor position (X=0) for a given tree row
+-- @param gridZ number Tree row index (0 to depth-1)  
+-- @return number pathZ The Z coordinate on the corridor
+function M.getCorridorZ(gridZ)
+    local rowSpacing = core.config.spacing + 1
+    return 1 + gridZ * rowSpacing  -- First row at Z=1, then spaced apart
 end
 
---- Navigate to a world position
--- @param targetX number Target X coordinate
+--- Get the tree's X position within a row
+-- @param gridX number Tree column index (0 to width-1)
+-- @return number treeX The X coordinate of the tree
+function M.getTreeX(gridX)
+    local spacing = core.config.spacing + 1
+    return 1 + gridX * spacing  -- First tree at X=1, then spaced apart
+end
+
+--- Navigate along the X=0 corridor to a specific Z position
 -- @param targetZ number Target Z coordinate
-function M.navigateToPosition(targetX, targetZ)
+function M.navigateCorridorTo(targetZ)
     local movement = core.libs.movement
     local pos = movement.getPosition()
     
-    -- Move in X first (less likely to hit trees)
-    local dx = targetX - pos.x
-    if dx > 0 then
-        movement.turnTo(1)  -- East
-        for i = 1, dx do
-            if not movement.forward(true) then
-                logDebug("Blocked moving east")
+    -- First ensure we're on the corridor (X=0)
+    if pos.x ~= 0 then
+        -- Need to get back to corridor - go west
+        if pos.x > 0 then
+            movement.turnTo(3)  -- West
+            for i = 1, pos.x do
+                movement.forward(true)
             end
-        end
-    elseif dx < 0 then
-        movement.turnTo(3)  -- West
-        for i = 1, -dx do
-            if not movement.forward(true) then
-                logDebug("Blocked moving west")
+        else
+            movement.turnTo(1)  -- East
+            for i = 1, -pos.x do
+                movement.forward(true)
             end
         end
     end
     
-    -- Then move in Z
+    -- Now move along corridor to target Z
     pos = movement.getPosition()
     local dz = targetZ - pos.z
     if dz > 0 then
         movement.turnTo(2)  -- South (into farm)
         for i = 1, dz do
-            if not movement.forward(true) then
-                logDebug("Blocked moving south")
-            end
+            movement.forward(true)
         end
     elseif dz < 0 then
         movement.turnTo(0)  -- North (toward home)
         for i = 1, -dz do
-            if not movement.forward(true) then
-                logDebug("Blocked moving north")
+            movement.forward(true)
+        end
+    end
+end
+
+--- Walk east to a tree position and return
+-- Turtle must be on corridor (X=0) at the correct Z
+-- @param treeX number The X position of the tree
+-- @param doHarvest boolean Whether to harvest/plant
+-- @return number logs, boolean planted
+function M.visitTree(treeX, doHarvest, doReplant)
+    local movement = core.libs.movement
+    local logs = 0
+    local planted = false
+    
+    -- Face east and walk to one block before tree
+    movement.turnTo(1)  -- East
+    local walkDistance = treeX - 1  -- Stop 1 block before tree (at X = treeX-1)
+    
+    for i = 1, walkDistance do
+        if not movement.forward(true) then
+            logWarn("Blocked walking to tree at X=%d", treeX)
+        end
+    end
+    
+    -- Now we're at X = treeX-1, facing east, tree is in front
+    if doHarvest then
+        local harvestLogs, hasContent = M.harvestTree()
+        logs = harvestLogs
+        
+        -- Replant if empty and requested
+        if not hasContent and doReplant then
+            if M.plantSapling() then
+                planted = true
             end
+        end
+    end
+    
+    -- Walk back to corridor (X=0)
+    movement.turnTo(3)  -- West
+    local pos = movement.getPosition()
+    for i = 1, pos.x do
+        movement.forward(true)
+    end
+    
+    return logs, planted
+end
+
+--- Navigate to a world position (used for returning home)
+-- @param targetX number Target X coordinate
+-- @param targetZ number Target Z coordinate
+function M.navigateToPosition(targetX, targetZ)
+    local movement = core.libs.movement
+    
+    -- First get to corridor
+    M.navigateCorridorTo(targetZ)
+    
+    -- If target is not on corridor, walk there
+    if targetX ~= 0 then
+        local pos = movement.getPosition()
+        local dx = targetX - pos.x
+        if dx > 0 then
+            movement.turnTo(1)
+            for i = 1, dx do movement.forward(true) end
+        elseif dx < 0 then
+            movement.turnTo(3)
+            for i = 1, -dx do movement.forward(true) end
         end
     end
 end
@@ -337,8 +398,8 @@ function M.returnHome()
     -- First get to ground level
     M.returnToGround()
     
-    -- Then navigate to 0,0
-    M.navigateToPosition(0, 0)
+    -- Navigate via corridor to home
+    M.navigateCorridorTo(0)
     
     -- Face north (original direction)
     movement.turnTo(0)
@@ -361,29 +422,21 @@ function M.harvestAllTrees(doReplant)
     core.state.phase = "harvesting"
     logInfo("Starting harvest pass #%d", core.stats.harvestPasses + 1)
     
-    -- Visit each tree position
+    -- Visit each row
     for z = 0, core.config.depth - 1 do
+        -- Navigate to this row on the corridor
+        local corridorZ = M.getCorridorZ(z)
+        M.navigateCorridorTo(corridorZ)
+        
+        -- Visit each tree in this row (walking east, then back)
         for x = 0, core.config.width - 1 do
             core.state.currentX = x
             core.state.currentZ = z
             
-            -- Get position to stand
-            local standX, standZ = M.getTreeCheckPosition(x, z)
-            M.navigateToPosition(standX, standZ)
-            
-            -- Face south to look at tree
-            movement.turnTo(2)
-            
-            -- Check and harvest
-            local logs, hasContent = M.harvestTree()
+            local treeX = M.getTreeX(x)
+            local logs, didPlant = M.visitTree(treeX, true, doReplant)
             totalLogs = totalLogs + logs
-            
-            -- Replant if empty and requested
-            if not hasContent and doReplant then
-                if M.plantSapling() then
-                    planted = planted + 1
-                end
-            end
+            if didPlant then planted = planted + 1 end
             
             -- Check inventory
             if core.isInventoryFull() then
@@ -470,19 +523,40 @@ function M.setupFarm()
         logWarn("Not enough saplings: have %d, need %d", available, needed)
     end
     
+    -- Visit each row via corridor
     for z = 0, core.config.depth - 1 do
+        local corridorZ = M.getCorridorZ(z)
+        M.navigateCorridorTo(corridorZ)
+        
+        -- Plant each tree in this row
         for x = 0, core.config.width - 1 do
-            local standX, standZ = M.getTreeCheckPosition(x, z)
-            M.navigateToPosition(standX, standZ)
+            local treeX = M.getTreeX(x)
             
-            -- Face south to place sapling
-            movement.turnTo(2)
+            -- Walk to tree position (but don't harvest, just plant)
+            local movement = core.libs.movement
+            movement.turnTo(1)  -- East
+            local walkDistance = treeX - 1
             
+            for i = 1, walkDistance do
+                movement.forward(true)
+            end
+            
+            -- Plant sapling
             if M.plantSapling() then
                 planted = planted + 1
                 logDebug("Planted at grid (%d, %d)", x, z)
             else
                 logWarn("Ran out of saplings at (%d, %d)", x, z)
+            end
+            
+            -- Walk back to corridor
+            movement.turnTo(3)  -- West
+            local pos = movement.getPosition()
+            for i = 1, pos.x do
+                movement.forward(true)
+            end
+            
+            if core.countSaplings() == 0 then
                 break
             end
             
