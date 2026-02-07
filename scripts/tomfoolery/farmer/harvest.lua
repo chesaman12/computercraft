@@ -663,6 +663,7 @@ function M.harvestAllTrees(doReplant)
     -- Visit each row
     for z = 0, core.config.depth - 1 do
         logInfo("--- Row Z=%d (grid row %d/%d) ---", z, z+1, core.config.depth)
+        print(string.format("Row %d/%d...", z+1, core.config.depth))
         
         -- Navigate to this row's corridor
         local corridorZ = M.getCorridorZ(z)
@@ -698,6 +699,15 @@ function M.harvestAllTrees(doReplant)
             totalLogs = totalLogs + logs
             if didPlant then planted = planted + 1 end
             
+            -- Show tree result
+            if logs > 0 then
+                write(string.format("[%d,%d]+%d ", x, z, logs))
+            elseif didPlant then
+                write(".")
+            else
+                write("-")
+            end
+            
             logInfo("Tree [%d,%d] result: logs=%d, planted=%s (totals: logs=%d, planted=%d)",
                 x, z, logs, tostring(didPlant), totalLogs, planted)
             
@@ -716,6 +726,7 @@ function M.harvestAllTrees(doReplant)
         
         -- Row complete - return to corridor X=0 for next row
         logInfo("Row Z=%d complete, returning to X=0", z)
+        print("")  -- New line after row of tree results
         movement.turnTo(3)  -- West
         local pos = movement.getPosition()
         for i = 1, pos.x do
