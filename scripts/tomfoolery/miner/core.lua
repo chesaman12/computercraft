@@ -21,6 +21,10 @@ M.config = {
     -- Snake mining (NOT recommended - less efficient)
     useSnakeMining = false,
     
+    -- Mining dimension mode: mine everything except junk (stone, deepslate, dirt)
+    -- instead of only mining specific ores
+    miningDimensionMode = true,
+    
     -- Behavior
     placeFloors = false,
     placeTorches = true,

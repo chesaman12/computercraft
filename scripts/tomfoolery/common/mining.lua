@@ -4,6 +4,10 @@
 
 local M = {}
 
+--- Mining dimension mode: when true, mines everything except junk blocks
+-- instead of only mining blocks in the ore list
+M.miningDimensionMode = false
+
 -- Try to load config module for external ore lists
 local configLoaded, config = pcall(require, "common.config")
 
@@ -47,6 +51,70 @@ end
 --- List of ore blocks that should be mined when found
 -- Loaded from config/ores.cfg if available, otherwise uses defaults
 M.ORES = loadOres()
+
+--- Default junk blocks for mining dimension (only these are ignored)
+local MINING_DIMENSION_JUNK = {
+    ["minecraft:stone"] = true,
+    ["minecraft:deepslate"] = true,
+    ["minecraft:dirt"] = true,
+}
+
+--- Load junk blocks from config file
+local function loadJunk()
+    if configLoaded and config.exists("junk.cfg") then
+        local junk = config.loadSet("junk.cfg")
+        local count = 0
+        for _ in pairs(junk) do count = count + 1 end
+        if count > 0 then
+            return junk
+        end
+    end
+    return MINING_DIMENSION_JUNK
+end
+
+--- List of junk blocks to ignore in mining dimension mode
+M.JUNK = loadJunk()
+
+--- Reload junk blocks from config file
+function M.reloadJunk()
+    M.JUNK = loadJunk()
+    local count = 0
+    for _ in pairs(M.JUNK) do count = count + 1 end
+    return count
+end
+
+--- Check if a block is junk (should be ignored)
+-- @param blockData table Block data from inspect
+-- @param junkList table|nil Custom junk list (optional)
+-- @return boolean True if block is junk
+function M.isJunk(blockData, junkList)
+    if not blockData then return true end  -- No block = treat as junk (air)
+    junkList = junkList or (M.miningDimensionMode and MINING_DIMENSION_JUNK or M.JUNK)
+    return junkList[blockData.name] == true
+end
+
+--- Check if a block is valuable (not junk, should be mined)
+-- Used in mining dimension mode
+-- @param blockData table Block data from inspect
+-- @return boolean True if block should be mined
+function M.isValuable(blockData)
+    if not blockData then return false end
+    -- Air blocks are never valuable
+    if M.AIR_BLOCKS[blockData.name] then return false end
+    -- In mining dimension mode, anything that's not junk is valuable
+    return not MINING_DIMENSION_JUNK[blockData.name]
+end
+
+--- Enable mining dimension mode
+-- In this mode, the turtle mines everything except junk blocks
+function M.enableMiningDimensionMode()
+    M.miningDimensionMode = true
+end
+
+--- Disable mining dimension mode (back to ore whitelist)
+function M.disableMiningDimensionMode()
+    M.miningDimensionMode = false
+end
 
 --- Reload ores from config file
 -- Call this after editing config/ores.cfg
@@ -170,12 +238,21 @@ function M.inspectDown()
     return nil
 end
 
---- Check if a block is an ore
+--- Check if a block should be mined
+-- In normal mode: returns true if block is in the ore list
+-- In mining dimension mode: returns true if block is NOT junk
 -- @param blockData table Block data from inspect
--- @param oreList table|nil Custom ore list (optional)
--- @return boolean True if block is an ore
+-- @param oreList table|nil Custom ore list (optional, ignored in mining dimension mode)
+-- @return boolean True if block should be mined
 function M.isOre(blockData, oreList)
     if not blockData then return false end
+    
+    -- Mining dimension mode: mine everything except junk
+    if M.miningDimensionMode then
+        return M.isValuable(blockData)
+    end
+    
+    -- Normal mode: only mine ores in the whitelist
     oreList = oreList or M.ORES
     return oreList[blockData.name] == true
 end

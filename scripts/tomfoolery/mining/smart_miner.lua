@@ -81,6 +81,11 @@ home.init(core)
 tunnel.init(core)
 patterns.init(core, home, tunnel)
 
+-- Apply mining dimension mode if configured
+if core.config.miningDimensionMode then
+    miningUtils.enableMiningDimensionMode()
+end
+
 -- ============================================
 -- STARTUP VALIDATION
 -- ============================================
@@ -102,6 +107,7 @@ local function validateStartup()
         pokeholeInterval = core.config.pokeholeInterval,
         placeTorches = core.config.placeTorches,
         torchInterval = core.config.torchInterval,
+        miningDimensionMode = core.config.miningDimensionMode,
         uploadOnComplete = uploadOnComplete,
     })
     
@@ -115,6 +121,12 @@ local function validateStartup()
         print("Mode: Snake (1x3 tunnel)")
     else
         print("Mode: Simple (1x2 tunnel)")
+    end
+    
+    if core.config.miningDimensionMode then
+        print("Ore detection: Mining dimension (mine all non-junk)")
+    else
+        print("Ore detection: Whitelist (ores.cfg)")
     end
     print("")
     
