@@ -571,7 +571,69 @@ end
 -- FULL HARVEST PASS
 -- ============================================
 
---- Harvest and replant all trees in the grid
+--- Process a single tree at the current position (facing south toward tree)
+-- Does NOT move - just inspects, harvests, and plants
+-- @param doHarvest boolean Whether to harvest trees
+-- @param doReplant boolean Whether to replant empty spots
+-- @return number logs, boolean planted
+local function processTreeAtPosition(doHarvest, doReplant)
+    local movement = core.libs.movement
+    local logs = 0
+    local planted = false
+    
+    local pos = movement.getPosition()
+    local facing = movement.getFacing()
+    
+    -- Check what's in front (should be tree position - 1 block south)
+    local hasBlock, blockData = turtle.inspect()
+    if hasBlock then
+        logDebug("Block in front: %s", blockData.name)
+    else
+        logDebug("No block in front (air/empty)")
+    end
+    
+    if doHarvest and hasBlock and core.isLog(blockData) then
+        -- There's a tree! Harvest it
+        logInfo("TREE DETECTED - Harvesting")
+        local harvestLogs, hasContent = M.harvestTree()
+        logs = harvestLogs
+        logInfo("Harvested %d logs", logs)
+        
+        -- After harvesting, the spot is empty - replant
+        if doReplant then
+            logDebug("Attempting replant after harvest")
+            if M.plantSapling() then
+                planted = true
+                logInfo("Replant SUCCESS")
+            else
+                logWarn("Replant FAILED after harvest")
+            end
+        end
+    elseif hasBlock and core.isSapling(blockData) then
+        -- Sapling already there - skip
+        logDebug("Sapling already present: %s", blockData.name)
+        planted = true  -- Consider it planted already
+    elseif not hasBlock then
+        -- Empty space - plant if requested
+        if doReplant then
+            logDebug("Empty spot, attempting to plant sapling...")
+            if M.plantSapling() then
+                planted = true
+                logInfo("Plant SUCCESS")
+            else
+                logWarn("Plant FAILED (empty spot)")
+            end
+        end
+    elseif hasBlock then
+        -- Some other block (not log, not sapling)
+        logWarn("Unknown/unexpected block: %s", blockData.name)
+    end
+    
+    return logs, planted
+end
+
+--- Harvest and replant all trees in the grid (optimized movement)
+-- Walks along each corridor row, visiting trees in sequence
 -- @param doReplant boolean Whether to replant empty positions
 -- @return number totalLogs, number saplingsPlanted
 function M.harvestAllTrees(doReplant)
@@ -596,28 +658,51 @@ function M.harvestAllTrees(doReplant)
     logInfo("Fuel at start: %s", tostring(turtle.getFuelLevel()))
     logInfo("Saplings at start: %d", core.countSaplings())
     
+    local spacing = core.config.spacing + 1  -- blocks between tree centers
+    
     -- Visit each row
     for z = 0, core.config.depth - 1 do
         logInfo("--- Row Z=%d (grid row %d/%d) ---", z, z+1, core.config.depth)
         
-        -- Navigate to this row on the corridor
+        -- Navigate to this row's corridor
         local corridorZ = M.getCorridorZ(z)
         M.navigateCorridorTo(corridorZ)
         
-        -- Visit each tree in this row (walking east, then back)
+        -- Now walk east along corridor, visiting each tree
+        -- Trees are at X = 1, 1+spacing, 1+2*spacing, ...
+        movement.turnTo(1)  -- Face east
+        
         for x = 0, core.config.width - 1 do
             core.state.currentX = x
             core.state.currentZ = z
             
             local treeX = M.getTreeX(x)
-            logInfo("Tree [%d,%d]: grid(%d,%d) -> world treeX=%d", x, z, x, z, treeX)
+            local pos = movement.getPosition()
             
-            local logs, didPlant = M.visitTree(treeX, true, doReplant)
+            -- Walk east to this tree's X position
+            local stepsNeeded = treeX - pos.x
+            logDebug("Tree [%d,%d]: walking %d steps east to X=%d", x, z, stepsNeeded, treeX)
+            
+            for i = 1, stepsNeeded do
+                movement.forward(true)
+            end
+            
+            -- Now at tree's X, face south to access the tree
+            movement.turnTo(2)  -- South
+            
+            pos = movement.getPosition()
+            logInfo("Tree [%d,%d] at (%d,%d,%d): treeX=%d", x, z, pos.x, pos.y, pos.z, treeX)
+            
+            -- Process this tree (harvest/plant)
+            local logs, didPlant = processTreeAtPosition(true, doReplant)
             totalLogs = totalLogs + logs
             if didPlant then planted = planted + 1 end
             
             logInfo("Tree [%d,%d] result: logs=%d, planted=%s (totals: logs=%d, planted=%d)",
                 x, z, logs, tostring(didPlant), totalLogs, planted)
+            
+            -- Face east again to continue along corridor
+            movement.turnTo(1)  -- East
             
             -- Check inventory
             if core.isInventoryFull() then
@@ -629,7 +714,15 @@ function M.harvestAllTrees(doReplant)
             sleep(0.05)
         end
         
-        logInfo("Row Z=%d complete", z)
+        -- Row complete - return to corridor X=0 for next row
+        logInfo("Row Z=%d complete, returning to X=0", z)
+        movement.turnTo(3)  -- West
+        local pos = movement.getPosition()
+        for i = 1, pos.x do
+            movement.forward(true)
+        end
+        
+        logDebug("Back at X=0")
     end
     
     core.stats.harvestPasses = core.stats.harvestPasses + 1
